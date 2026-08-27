@@ -22,7 +22,7 @@ app.use(cors());
 app.use(express.json({ limit: "80mb" }));
 
 app.get("/api/health", (req, res) => {
-  res.json({ ok: true, aiEnabled: Boolean(process.env.USER_LLM_API_KEY), telegramEnabled: Boolean(process.env.TELEGRAM_BOT_TOKEN), db: path.join(__dirname, "..", "..", "data", "teacher_agent.db") });
+  res.json({ ok: true, aiEnabled: Boolean(process.env.USER_LLM_API_KEY), telegramEnabled: Boolean(process.env.TELEGRAM_BOT_TOKEN), db: process.env.DATA_DIR ? path.join(process.env.DATA_DIR, "teacher_agent.db") : path.join(__dirname, "..", "..", "data", "teacher_agent.db") });
 });
 
 app.use("/api/auth", authRoutes);

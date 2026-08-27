@@ -5,7 +5,8 @@ import AdmZip from "adm-zip";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-export const UPLOAD_DIR = path.join(__dirname, "..", "..", "data", "uploads");
+const dataDir = process.env.DATA_DIR || path.join(__dirname, "..", "..", "data");
+export const UPLOAD_DIR = path.join(dataDir, "uploads");
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024;

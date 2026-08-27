@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: ai-teacher-agent
+    runtime: node
+    plan: starter
+    nodeVersion: "22"
+    buildCommand: cd frontend && npm install && npm run build && cd ../server && npm install
+    startCommand: cd server && node bootstrap.mjs && node src/index.js
+    disk:
+      name: teacher-data
+      mountPath: /opt/render/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: DATA_DIR
+        value: /opt/render/data
+      - key: JWT_SECRET
+        generateValue: true
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: USER_LLM_API_KEY
+        sync: false
+      - key: USER_LLM_BASE_URL
+        sync: false
+      - key: USER_LLM_MODEL
+        sync: false
+      - key: TEACHER_PASSWORD
+        sync: false
