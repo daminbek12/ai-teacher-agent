@@ -1,4 +1,5 @@
 import express from "express";
+import fs from "node:fs";
 import db from "../db/index.js";
 import { authRequired } from "./authMiddleware.js";
 import {
@@ -177,6 +178,21 @@ router.post("/textbooks/:id/structure", async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+router.get("/textbooks/:id/file", (req, res) => {
+  const tb = db.prepare(`SELECT * FROM textbooks WHERE id = ? AND teacher_id = ?`).get(req.params.id, req.user.id);
+  if (!tb) return res.status(404).json({ error: "Darslik topilmadi" });
+  const version = db
+    .prepare(`SELECT v.*, f.file_path, f.original_name, f.mime_type FROM textbook_versions v LEFT JOIN uploaded_files f ON f.id = v.file_id WHERE v.teacher_id = ? AND v.textbook_id = ? ORDER BY v.is_active DESC, v.id DESC LIMIT 1`)
+    .get(req.user.id, req.params.id);
+  if (!version?.file_path || !fs.existsSync(version.file_path)) {
+    return res.status(404).json({ error: "Bu darslik uchun PDF fayl topilmadi" });
+  }
+  const fileName = version.original_name || `darslik_${tb.id}.pdf`;
+  res.setHeader("Content-Type", version.mime_type || "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);
+  fs.createReadStream(version.file_path).pipe(res);
 });
 
 router.get("/textbooks/:id/index", (req, res) => {

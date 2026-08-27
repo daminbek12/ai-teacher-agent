@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { api } from "../api.js";
+import { api, downloadBlob } from "../api.js";
 import { Card, Button, Modal, Field, Input, Badge, Spinner, Empty } from "../components/ui.jsx";
 
 export default function Textbooks() {
@@ -22,6 +22,16 @@ export default function Textbooks() {
   };
 
   useEffect(() => { load(); }, []);
+
+  const downloadPdf = async (id) => {
+    try {
+      const blob = await api(`/textbooks/${id}/file`, { download: true });
+      const tb = sel || textbooks.find((t) => t.id === id);
+      downloadBlob(blob, `${(tb?.title || "darslik").replace(/[^\w\d-]+/g, "_")}.pdf`);
+    } catch (err) {
+      alert(err.message);
+    }
+  };
 
   const view = async (id) => {
     const tb = await api(`/textbooks/${id}`);
@@ -153,7 +163,18 @@ export default function Textbooks() {
             <div key={t.id} onClick={() => view(t.id)} className={`cursor-pointer rounded-xl border bg-white p-4 shadow-sm transition hover:shadow-md ${sel?.id === t.id ? "border-indigo-500 ring-2 ring-indigo-100" : "border-gray-200"}`}>
               <div className="mb-2 flex items-center justify-between">
                 <Badge color="indigo">{t.grade}-sinf</Badge>
-                <Badge color={t.status === "verified" ? "green" : "amber"}>{t.status === "verified" ? "Tasdiqlangan" : "Qayta ishlanmoqda"}</Badge>
+                <div className="flex gap-1">
+                  {t.has_file ? (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); downloadPdf(t.id); }}
+                      className="rounded-md border border-gray-200 px-2 py-0.5 text-[10px] font-medium text-indigo-600 hover:bg-indigo-50"
+                      title="PDF yuklab olish"
+                    >
+                      PDF
+                    </button>
+                  ) : null}
+                  <Badge color={t.status === "verified" ? "green" : "amber"}>{t.status === "verified" ? "Tasdiqlangan" : "Qayta ishlanmoqda"}</Badge>
+                </div>
               </div>
               <div className="mb-1 font-semibold text-gray-900">{t.title}</div>
               <div className="text-xs text-gray-500">
@@ -211,7 +232,10 @@ export default function Textbooks() {
                 )}
               </div>
             </div>
-            <Button variant="outline" onClick={() => setShowStructure(true)}>Bob/mavzularga ajratish</Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => downloadPdf(sel.id)}>PDF yuklab olish</Button>
+              <Button variant="outline" onClick={() => setShowStructure(true)}>Bob/mavzularga ajratish</Button>
+            </div>
           </div>
         )}
       </Modal>

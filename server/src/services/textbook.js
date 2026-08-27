@@ -44,7 +44,12 @@ export function activateTextbookVersion(teacherId, textbookId, versionId) {
 }
 
 export function listTextbooks(teacherId) {
-  return db.prepare(`SELECT * FROM textbooks WHERE teacher_id = ? ORDER BY id DESC`).all(teacherId);
+  return db
+    .prepare(
+      `SELECT t.*, EXISTS(SELECT 1 FROM textbook_versions v JOIN uploaded_files f ON f.id = v.file_id WHERE v.textbook_id = t.id AND f.file_path != '') AS has_file
+       FROM textbooks t WHERE t.teacher_id = ? ORDER BY t.id DESC`
+    )
+    .all(teacherId);
 }
 
 export function getTextbook(teacherId, textbookId) {
@@ -52,6 +57,9 @@ export function getTextbook(teacherId, textbookId) {
   if (!tb) return null;
   tb.versions = db.prepare(`SELECT * FROM textbook_versions WHERE textbook_id = ? ORDER BY id DESC`).all(textbookId);
   tb.chapters = db.prepare(`SELECT * FROM chapters WHERE textbook_id = ? ORDER BY chapter_no`).all(textbookId);
+  tb.has_file = db
+    .prepare(`SELECT EXISTS(SELECT 1 FROM textbook_versions v JOIN uploaded_files f ON f.id = v.file_id WHERE v.textbook_id = ? AND v.teacher_id = ? AND f.file_path != '') AS x`)
+    .get(textbookId, teacherId).x === 1;
   return tb;
 }
 
