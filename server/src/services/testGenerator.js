@@ -318,15 +318,20 @@ function chunkToSource(chunk) {
 
 const STOP_WORDS = new Set([
   "va", "bilan", "uchun", "qilgan", "bo'lgan", "olgan", "degan", "yilda", "yil", "sinf",
-  "keyin", "oldin", "esa", "ham", "bu", "u", "shu", "uning", "ular", "bo'yicha", "orasida",
+  "keyin", "oldin", "esa", "ham", "bu", "shu", "uning", "ular", "bo'yicha", "orasida",
+  "sahifa", "mavzu", "darslik",
 ]);
 
 function cleanToken(w) {
-  return w.replace(/[.,;:!?"'«»()]+/g, "").trim();
+  return w.replace(/[.,;:!?"«»()]+/g, "").trim();
 }
 
-function isCyrToken(w) {
-  return /[А-ЯЁЎҚҒҲ]/.test(w) && !STOP_WORDS.has(w.toLowerCase());
+function isLatinToken(w) {
+  return /[A-Za-z]/.test(w) && w.length >= 4 && !STOP_WORDS.has(w.toLowerCase());
+}
+
+function isCapitalized(word) {
+  return /^[A-Z]/.test(word) && /[a-z]/.test(word);
 }
 
 function extractDatesSentence(sentence) {
@@ -345,7 +350,7 @@ function nearYears(year) {
 }
 
 function pickProperNoun(sentence) {
-  const words = sentence.split(/\s+/).map(cleanToken).filter((w) => w.length >= 4 && isCyrToken(w) && /^[А-ЯЁЎҚҒҲ]/.test(w));
+  const words = sentence.split(/\s+/).map(cleanToken).filter((w) => isLatinToken(w) && isCapitalized(w));
   const seen = new Set();
   const unique = words.filter((w) => (seen.has(w.toLowerCase()) ? false : (seen.add(w.toLowerCase()), true)));
   return unique[0] || null;
@@ -379,11 +384,14 @@ function localQuestionsFromChunks({ topic, chunks, count, difficulties }) {
   const candidates = [];
   for (const chunk of chunks) {
     const content = chunk.content || "";
+    if (content.replace(/\s+/g, " ").match(/(umumta'?lim maktablari|Vse uchebniki|UDK|BBK|ISBN|nashriyot|tarjimon|mualliflar)/i) && content.length < 500) continue;
     const sentences = content
       .split(/(?<=[.!?])\s+/)
       .map((s) => s.trim())
-      .filter((s) => s.length > 30 && s.length < 260 && /[A-Za-zА-Яа-я0-9]{4,}/.test(s))
-      .filter((s) => !s.includes("______"));
+      .filter((s) => s.length > 30 && s.length < 260 && /[A-Za-z0-9]{4,}/.test(s))
+      .filter((s) => !s.includes("______"))
+      .filter((s) => !/(umumta'?lim maktablari|Vse uchebniki|UDK |BBK |ISBN|dar[s]lik|mualliflar|tarjimon|nashriyot)/i.test(s))
+      .slice(1);
     for (const sentence of sentences) candidates.push({ chunk, sentence });
   }
 
@@ -431,8 +439,8 @@ function localQuestionsFromChunks({ topic, chunks, count, difficulties }) {
       });
     } else if (noun) {
       const blanked = clozeSentence(sentence, noun);
-      const localPool = sentence.split(/\s+/).map(cleanToken).filter((w) => w.length >= 4 && isCyrToken(w));
-      const globalPool = chunks.flatMap((c) => (c.content || "").split(/\s+/)).map(cleanToken).filter((w) => w.length >= 4 && /^[А-ЯЁЎҚҒҲ]/.test(w) && isCyrToken(w));
+      const localPool = sentence.split(/\s+/).map(cleanToken).filter((w) => isLatinToken(w));
+      const globalPool = chunks.flatMap((c) => (c.content || "").split(/\s+/)).map(cleanToken).filter((w) => /^[A-Z]/.test(w) && isLatinToken(w));
       const options = fillDistractors(noun, [...localPool, ...shuffle(globalPool).slice(0, 40)]);
       result.push({
         question_text: `Bo'sh joyni to'ldiring:\n"${blanked}"`,

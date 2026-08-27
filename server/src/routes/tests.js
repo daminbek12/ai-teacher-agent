@@ -77,6 +77,23 @@ router.post("/", async (req, res) => {
   }
 });
 
+router.post("/daily", async (req, res) => {
+  try {
+    const { prepareDailyTest } = await import("../services/scheduler.js");
+    const created = await prepareDailyTest(req.user.id);
+    if (!created || created.length === 0) {
+      return res.json({ tests: [], message: "Bugun uchun kunlik test yaratilmadi (klass yoki mavzu yo'q, yoki allaqachon yaratilgan)" });
+    }
+    const tests = created.map((t) => ({
+      ...t,
+      questions: enrichQuestions(db.prepare(`SELECT * FROM questions WHERE test_id = ? ORDER BY id`).all(t.id)),
+    }));
+    res.json({ tests });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.post("/manual", async (req, res) => {
   try {
     const { class_id, title, topic = "", question_count = 20, duration_minutes = 25, questions = [] } = req.body;

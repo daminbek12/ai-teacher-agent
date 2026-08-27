@@ -4,6 +4,7 @@ import { Card, Button, Modal, Field, Input, Select, Badge, Spinner, Empty } from
 
 const typeLabels = {
   topic: "Mavzu testi",
+  daily: "Kunlik test",
   weekly: "Haftalik test",
   monthly: "Oylik test",
   diagnostic: "Diagnostik test",
@@ -14,6 +15,7 @@ const typeLabels = {
 
 const typeColors = {
   topic: "indigo",
+  daily: "cyan",
   weekly: "green",
   monthly: "blue",
   diagnostic: "amber",
@@ -27,6 +29,7 @@ export default function Tests() {
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [dailyBusy, setDailyBusy] = useState(false);
   const [viewTest, setViewTest] = useState(null);
   const [form, setForm] = useState({
     class_id: "",
@@ -59,6 +62,23 @@ export default function Tests() {
       setViewTest(test);
     } catch (err) {
       alert(err.message);
+    }
+  };
+
+  const generateDaily = async () => {
+    setDailyBusy(true);
+    try {
+      const res = await api("/tests/daily", { method: "POST", body: {} });
+      if (res.tests?.length) {
+        setTests((p) => [...res.tests, ...p]);
+        alert(`Kunlik testlar yaratildi: ${res.tests.length} ta`);
+      } else {
+        alert(res.message || "Bugun uchun kunlik test yaratilmadi");
+      }
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setDailyBusy(false);
     }
   };
 
@@ -97,7 +117,12 @@ export default function Tests() {
           <h1 className="text-2xl font-bold text-gray-900">Testlar</h1>
           <p className="text-sm text-gray-500">Avtomatik test yaratish, Word/PDF, baholash</p>
         </div>
-        <Button onClick={() => setShowCreate(true)}>+ Yangi test</Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={generateDaily} disabled={dailyBusy}>
+            {dailyBusy ? "Yaratilmoqda..." : "Kunlik test"}
+          </Button>
+          <Button onClick={() => setShowCreate(true)}>+ Yangi test</Button>
+        </div>
       </div>
 
       {tests.length === 0 ? (

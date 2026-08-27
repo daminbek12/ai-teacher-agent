@@ -156,10 +156,66 @@ export function scheduleDailyReminders(teacherId) {
   return task;
 }
 
+export async function prepareDailyTest(teacherId) {
+  const settings = getTeacherSettings(teacherId);
+  if (settings.daily_test_enabled === false) return null;
+
+  const count = settings.daily_test_count || Math.min(settings.test_count || 10, 10);
+  const today = db.prepare(`SELECT date('now', 'localtime') AS d`).get().d;
+  const classes = db.prepare(`SELECT * FROM classes WHERE teacher_id = ?`).all(teacherId);
+  const created = [];
+
+  for (const cls of classes) {
+    const existing = db
+      .prepare(`SELECT id FROM tests WHERE teacher_id = ? AND class_id = ? AND type = 'daily' AND date(created_at) = ?`)
+      .get(teacherId, cls.id, today);
+    if (existing) continue;
+
+    const topicInfo = db
+      .prepare(`SELECT * FROM topics WHERE class_id = ? AND status IN ('pending','in_progress','done') ORDER BY CASE status WHEN 'in_progress' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END, order_no DESC LIMIT 1`)
+      .get(cls.id);
+
+    try {
+      const test = await createFullTest(teacherId, {
+        class_id: cls.id,
+        title: `Kunlik test: ${cls.name} (${today})`,
+        type: "daily",
+        topic: topicInfo ? topicInfo.title : "",
+        question_count: count,
+        subject: cls.subject || "Tarix",
+        local_only: true,
+        skip_qc: true,
+      });
+      created.push(test);
+      db.prepare(
+        `INSERT INTO reminders (teacher_id, message, scheduled_at, status)
+         VALUES (?, ?, datetime('now', 'localtime'), 'pending')`
+      ).run(teacherId, `Kunlik test tayyor: "${test.title}" (${test.question_count} savol). Test ID: ${test.id}`);
+    } catch (e) {
+      db.prepare(
+        `INSERT INTO reminders (teacher_id, message, scheduled_at, status)
+         VALUES (?, ?, datetime('now', 'localtime'), 'pending')`
+      ).run(teacherId, `Kunlik test xatosi (${cls.name}): ${e.message}`);
+    }
+  }
+  return created;
+}
+
+export function scheduleDailyTestRun(teacherId) {
+  const settings = getTeacherSettings(teacherId);
+  const time = settings.daily_test_time || "08:00";
+  const [hh, mm] = String(time).split(":").map(Number);
+  const cronExpr = `${mm || 0} ${hh || 8} * * *`;
+  return cron.schedule(cronExpr, async () => {
+    await prepareDailyTest(teacherId);
+  }, { scheduled: true });
+}
+
 export function scheduleAll(teacherId) {
   scheduleDailyBriefing(teacherId);
   scheduleDailyReminders(teacherId);
   scheduleWeeklyTest(teacherId);
+  scheduleDailyTestRun(teacherId);
 }
 
 function notifyTeacher(teacherId, message) {

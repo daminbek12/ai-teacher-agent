@@ -86,6 +86,29 @@ export default function Settings() {
               </Select>
             </Field>
           </Card>
+
+          <Card title="Kunlik test" subtitle="Har kuni barcha sinflar uchun avtomatik qisqa test">
+            <label className="mb-3 flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2.5">
+              <span className="text-sm text-gray-700">Kunlik test yoqilgan</span>
+              <input
+                type="checkbox"
+                className="h-5 w-5 accent-indigo-600"
+                checked={settings.daily_test_enabled !== false}
+                onChange={(e) => set("daily_test_enabled")(e.target.checked)}
+              />
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Yaratilish vaqti">
+                <Input type="time" value={settings.daily_test_time || "08:00"} onChange={(e) => set("daily_test_time")(e.target.value)} />
+              </Field>
+              <Field label="Savollar soni">
+                <Select value={settings.daily_test_count || 10} onChange={(e) => set("daily_test_count")(Number(e.target.value))}>
+                  {[5, 10, 15].map((n) => <option key={n} value={n}>{n} ta</option>)}
+                </Select>
+              </Field>
+            </div>
+            <p className="mt-2 text-xs text-gray-500">Har kuni belgilangan vaqtda har bir sinf uchun darslik asosida qisqa test avtomatik yaratiladi. Bir kunda bir sinfga bitta kunlik test.</p>
+          </Card>
         </div>
 
         <div className="space-y-6">
@@ -101,7 +124,8 @@ export default function Settings() {
             </label>
             <div className="space-y-2 text-sm text-gray-600">
               <p>- Har kuni 07:30 da ertalabki briefing tayyorlanadi.</p>
-              <p>- Juma kuni test avtomatik yaratiladi.</p>
+              <p>- Har kuni belgilangan vaqtda kunlik test avtomatik yaratiladi.</p>
+              <p>- Juma kuni haftalik test avtomatik yaratiladi.</p>
               <p>- Eslatmalar avtomatik yuboriladi.</p>
             </div>
             <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
