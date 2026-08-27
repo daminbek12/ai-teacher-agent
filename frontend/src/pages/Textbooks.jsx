@@ -12,6 +12,7 @@ export default function Textbooks() {
   const [structureText, setStructureText] = useState("");
   const [showStructure, setShowStructure] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState(null);
   const [searchResults, setSearchResults] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -50,27 +51,56 @@ export default function Textbooks() {
       return;
     }
     setBusy(true);
+    setProgress(null);
     try {
       const base64 = await fileToBase64(file);
-      const result = await api("/textbooks/upload", {
-        method: "POST",
-        body: {
-          file_base64: base64,
-          file_name: file.name,
-          subject: meta.subject,
-          grade: meta.grade,
-          title: meta.title || file.name.replace(/\.[^.]+$/, ""),
-          edition_year: meta.edition_year,
-        },
-      });
+      let result;
+      if (base64.length > 3 * 1024 * 1024) {
+        const CHUNK = 2 * 1024 * 1024;
+        const totalChunks = Math.ceil(base64.length / CHUNK);
+        const uploadId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        for (let i = 0; i < totalChunks; i++) {
+          const chunk = base64.slice(i * CHUNK, (i + 1) * CHUNK);
+          result = await api("/textbooks/upload-chunk", {
+            method: "POST",
+            body: {
+              upload_id: uploadId,
+              chunk_index: i,
+              total_chunks: totalChunks,
+              chunk_base64: chunk,
+              file_name: file.name,
+              subject: meta.subject,
+              grade: meta.grade,
+              title: meta.title || file.name.replace(/\.[^.]+$/, ""),
+              edition_year: meta.edition_year,
+            },
+          });
+          setProgress({ done: (result.received || i + 1), total: totalChunks });
+          if (result.done) break;
+        }
+      } else {
+        result = await api("/textbooks/upload", {
+          method: "POST",
+          body: {
+            file_base64: base64,
+            file_name: file.name,
+            subject: meta.subject,
+            grade: meta.grade,
+            title: meta.title || file.name.replace(/\.[^.]+$/, ""),
+            edition_year: meta.edition_year,
+          },
+        });
+      }
       alert(`Darslik yuklandi: ${result.extracted_chars} belgi, ${result.pages} sahifa. Endi bob/mavzularga ajrating.`);
       await load();
       setShowUpload(false);
       setFile(null);
+      setProgress(null);
     } catch (err) {
       alert(err.message);
     } finally {
       setBusy(false);
+      setProgress(null);
     }
   };
 
@@ -263,6 +293,18 @@ export default function Textbooks() {
           </div>
           <Field label="Darslik nomi"><Input required value={meta.title} onChange={(e) => setMeta({ ...meta, title: e.target.value })} /></Field>
           <Field label="Nashr yili"><Input value={meta.edition_year} onChange={(e) => setMeta({ ...meta, edition_year: e.target.value })} /></Field>
+          {progress && (
+            <div className="mb-3">
+              <div className="mb-1 flex justify-between text-xs text-gray-600">
+                <span>Yuklanmoqda... {progress.done}/{progress.total}</span>
+                <span>{Math.round((progress.done / progress.total) * 100)}%</span>
+              </div>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                <div className="h-full bg-blue-600 transition-all"
+                  style={{ width: `${(progress.done / progress.total) * 100}%` }} />
+              </div>
+            </div>
+          )}
           <Button type="submit" disabled={busy} className="w-full">{busy ? "Yuklanmoqda..." : "Saqlash"}</Button>
         </form>
       </Modal>

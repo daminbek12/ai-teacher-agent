@@ -1,5 +1,6 @@
 import express from "express";
 import fs from "node:fs";
+import path from "node:path";
 import db from "../db/index.js";
 import { authRequired } from "./authMiddleware.js";
 import {
@@ -63,21 +64,21 @@ router.post("/textbooks/:id/versions/:versionId/activate", (req, res) => {
   }
 });
 
-// Upload file (teacher manual upload): PDF, DOCX, ZIP, image, txt
-router.post("/textbooks/upload", async (req, res) => {
-  const { file_base64, file_name, subject, grade, title, edition_year = "", version = "", localOnly = false } = req.body;
-  if (!file_base64 || !file_name) return res.status(400).json({ error: "file_base64 va file_name talab qilinadi" });
-  if (!subject || !grade || !title) return res.status(400).json({ error: "subject, grade, title talab qilinadi" });
+const UPLOAD_CHUNK_DIR = process.env.UPLOAD_CHUNK_DIR || "/tmp/teacher_upload_chunks";
 
-  const buffer = Buffer.from(file_base64, "base64");
+function getChunkDir(uploadId) {
+  return path.join(UPLOAD_CHUNK_DIR, String(uploadId));
+}
+
+async function processUploadedBuffer(teacherId, { buffer, file_name, subject, grade, title, edition_year = "", version = "", localOnly = false }) {
   const mime = guessMime(file_name);
   const check = isValidUpload(mime, buffer.length);
-  if (!check.ok) return res.status(400).json({ error: check.error });
+  if (!check.ok) return { error: check.error };
 
-  const stored = storeUploadedFile(req.user.id, { buffer, originalName: file_name, mime, category: "textbook" });
+  const stored = storeUploadedFile(teacherId, { buffer, originalName: file_name, mime, category: "textbook" });
   const info = db
     .prepare(`INSERT INTO uploaded_files (teacher_id, original_name, stored_name, mime_type, size, category, status, file_path) VALUES (?, ?, ?, ?, ?, 'textbook', 'uploaded', ?)`)
-    .run(req.user.id, file_name, stored.storedName, mime, buffer.length, stored.filePath);
+    .run(teacherId, file_name, stored.storedName, mime, buffer.length, stored.filePath);
   const fileId = info.lastInsertRowid;
 
   let pages = 0;
@@ -105,7 +106,7 @@ router.post("/textbooks/upload", async (req, res) => {
     const result = extractZip(buffer);
     if (!result.ok) {
       db.prepare(`UPDATE uploaded_files SET status = 'rejected' WHERE id = ?`).run(fileId);
-      return res.status(400).json({ error: result.error });
+      return { error: result.error };
     }
     for (const f of result.files) {
       if (f.mime === "application/pdf" && !fullText) {
@@ -120,8 +121,8 @@ router.post("/textbooks/upload", async (req, res) => {
     }
   }
 
-  const tb = createTextbook(req.user.id, { subject, grade, title, edition_year, pages, status: "pending_review" });
-  const v = addTextbookVersion(req.user.id, tb.id, {
+  const tb = createTextbook(teacherId, { subject, grade, title, edition_year, pages, status: "pending_review" });
+  const v = addTextbookVersion(teacherId, tb.id, {
     version: version || `v${edition_year || "1"}`,
     edition_year,
     source: "manual_upload",
@@ -130,16 +131,69 @@ router.post("/textbooks/upload", async (req, res) => {
   });
   db.prepare(`UPDATE uploaded_files SET status = 'processed' WHERE id = ?`).run(fileId);
   db.prepare(`INSERT INTO ocr_results (teacher_id, file_id, kind, raw_text, confidence, status) VALUES (?, ?, 'textbook', ?, ?, 'done')`)
-    .run(req.user.id, fileId, fullText.slice(0, 200000), ocrConfidence);
+    .run(teacherId, fileId, fullText.slice(0, 200000), ocrConfidence);
 
-  res.json({
+  return {
     textbook_id: tb.id,
     version: v,
     extracted_chars: fullText.length,
     pages,
     needs_structure: true,
     message: "Darslik yuklandi. Endi /textbooks/:id/structure orqali bob/mavzularga ajrating.",
-  });
+  };
+}
+
+// Upload file (teacher manual upload): PDF, DOCX, ZIP, image, txt
+router.post("/textbooks/upload", async (req, res) => {
+  const { file_base64, file_name, subject, grade, title, edition_year = "", version = "", localOnly = false } = req.body;
+  if (!file_base64 || !file_name) return res.status(400).json({ error: "file_base64 va file_name talab qilinadi" });
+  if (!subject || !grade || !title) return res.status(400).json({ error: "subject, grade, title talab qilinadi" });
+
+  const buffer = Buffer.from(file_base64, "base64");
+  const mime = guessMime(file_name);
+  const check = isValidUpload(mime, buffer.length);
+  if (!check.ok) return res.status(400).json({ error: check.error });
+
+  const result = await processUploadedBuffer(req.user.id, { buffer, file_name, subject, grade, title, edition_year, version, localOnly });
+  if (result.error) return res.status(400).json({ error: result.error });
+  res.json(result);
+});
+
+// Chunked upload: client splits large file into chunks to bypass proxy body limits
+router.post("/textbooks/upload-chunk", async (req, res) => {
+  const { upload_id, chunk_index, total_chunks, chunk_base64, file_name, subject, grade, title, edition_year = "" } = req.body;
+  if (chunk_index === undefined || total_chunks === undefined || !chunk_base64) {
+    return res.status(400).json({ error: "upload_id, chunk_index, total_chunks, chunk_base64 talab qilinadi" });
+  }
+
+  const chunkDir = getChunkDir(upload_id);
+  fs.mkdirSync(chunkDir, { recursive: true });
+  const chunkPath = path.join(chunkDir, `${chunk_index}.bin`);
+  fs.writeFileSync(chunkPath, Buffer.from(chunk_base64, "base64"));
+
+  const received = fs.readdirSync(chunkDir).filter((f) => f.endsWith(".bin")).length;
+  if (received < total_chunks) {
+    return res.json({ done: false, received, total_chunks });
+  }
+
+  const parts = [];
+  for (let i = 0; i < total_chunks; i++) {
+    const p = path.join(chunkDir, `${i}.bin`);
+    if (!fs.existsSync(p)) {
+      return res.status(400).json({ error: `Chunk ${i} topilmadi` });
+    }
+    parts.push(fs.readFileSync(p));
+  }
+  const buffer = Buffer.concat(parts);
+  fs.rmSync(chunkDir, { recursive: true, force: true });
+
+  if (!file_name || !subject || !grade || !title) {
+    return res.status(400).json({ error: "file_name, subject, grade, title talab qilinadi" });
+  }
+
+  const result = await processUploadedBuffer(req.user.id, { buffer, file_name, subject, grade, title, edition_year });
+  if (result.error) return res.status(400).json({ error: result.error });
+  res.json({ done: true, ...result });
 });
 
 // Structure and index textbook content
