@@ -104,6 +104,9 @@
 *.log
 **/logs/
 
+# Database
+server/data/
+
 # Environment and secrets
 **/.env
 **/.env.local
