@@ -316,6 +316,57 @@ function chunkToSource(chunk) {
   return src;
 }
 
+const STOP_WORDS = new Set([
+  "va", "bilan", "uchun", "qilgan", "bo'lgan", "olgan", "degan", "yilda", "yil", "sinf",
+  "keyin", "oldin", "esa", "ham", "bu", "u", "shu", "uning", "ular", "bo'yicha", "orasida",
+]);
+
+function cleanToken(w) {
+  return w.replace(/[.,;:!?"'«»()]+/g, "").trim();
+}
+
+function isCyrToken(w) {
+  return /[А-ЯЁЎҚҒҲ]/.test(w) && !STOP_WORDS.has(w.toLowerCase());
+}
+
+function extractDatesSentence(sentence) {
+  const m = sentence.match(/\b(1[0-9]{3}|20[0-9]{2})[-\s]?(?:yil|жыл|жили|йил)?\b/i);
+  return m ? m[1] : null;
+}
+
+function clozeSentence(sentence, target) {
+  return sentence.replace(target, "______");
+}
+
+function nearYears(year) {
+  const offsets = [-25, -15, -8, 8, 15, 25, -50, 50];
+  const pool = offsets.map((o) => String(Number(year) + o)).filter((y) => Number(y) > 1000);
+  return shuffle(pool).slice(0, 3);
+}
+
+function pickProperNoun(sentence) {
+  const words = sentence.split(/\s+/).map(cleanToken).filter((w) => w.length >= 4 && isCyrToken(w) && /^[А-ЯЁЎҚҒҲ]/.test(w));
+  const seen = new Set();
+  const unique = words.filter((w) => (seen.has(w.toLowerCase()) ? false : (seen.add(w.toLowerCase()), true)));
+  return unique[0] || null;
+}
+
+function pickKeyTerm(chunk) {
+  const text = (chunk.keywords || "") + " " + (chunk.lesson_title || "") + " " + (chunk.chapter_title || "");
+  const words = text.split(/[,;|\s]+/).map(cleanToken).filter((w) => w.length >= 3);
+  return words.length ? words[0] : null;
+}
+
+function fillDistractors(correctText, pool) {
+  const list = pool.filter((w) => w && w !== correctText);
+  const seen = new Set([correctText.toLowerCase()]);
+  const unique = list.filter((w) => (seen.has(w.toLowerCase()) ? false : (seen.add(w.toLowerCase()), true)));
+  while (unique.length < 3) {
+    unique.push(`${correctText.slice(0, 4)}… (${unique.length + 2}-variant)`);
+  }
+  return unique.slice(0, 3);
+}
+
 function localQuestionsFromChunks({ topic, chunks, count, difficulties }) {
   const result = [];
   const plan = buildTestPlan(count, difficulties);
@@ -324,29 +375,84 @@ function localQuestionsFromChunks({ topic, chunks, count, difficulties }) {
     ...Array(plan.medium).fill("medium"),
     ...Array(plan.hard).fill("hard"),
   ];
-  for (let i = 0; i < count; i++) {
-    const chunk = chunks[i % chunks.length];
-    const source = chunkToSource(chunk);
+
+  const candidates = [];
+  for (const chunk of chunks) {
     const content = chunk.content || "";
-    const sentences = content.split(/(?<=[.!?])\s+/).filter((s) => s.trim().length > 25 && /[A-Za-zа-яА-Я0-9]{4,}/.test(s));
-    const sentence = sentences[i % Math.max(sentences.length, 1)] || content.slice(0, 180);
-    const words = sentence.split(/\s+/);
-    const candidates = words.filter((w) => w.length >= 5).map((w) => w.replace(/[.,;:!?]+$/, ""));
-    const key = candidates[0] || topic;
-    const distractorPool = words.filter((w) => w.length >= 4 && !w.startsWith(key)).map((w) => w.replace(/[.,;:!?]+$/, "")).filter((w, idx, arr) => arr.indexOf(w) === idx);
-    while (distractorPool.length < 3) {
-      distractorPool.push(distractorPool.length === 0 ? "Ma'lumot emas" : `Noto'g'ri variant ${distractorPool.length}`);
+    const sentences = content
+      .split(/(?<=[.!?])\s+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 30 && s.length < 260 && /[A-Za-zА-Яа-я0-9]{4,}/.test(s))
+      .filter((s) => !s.includes("______"));
+    for (const sentence of sentences) candidates.push({ chunk, sentence });
+  }
+
+  const usedSentences = new Set();
+  let cursor = 0;
+
+  for (let i = 0; i < count && candidates.length; i++) {
+    let chosen = null;
+    for (let tries = 0; tries < candidates.length; tries++) {
+      const cand = candidates[(cursor + tries) % candidates.length];
+      if (!usedSentences.has(cand.sentence)) {
+        chosen = cand;
+        cursor = (cursor + tries + 1) % candidates.length;
+        break;
+      }
     }
-    result.push({
-      question_text: `Matnga asosan: "${sentence.trim()}" — quyidagilardan qaysi biri "${topic}" mavzusiga tegishli?`,
-      options: [key, ...distractorPool.slice(0, 3)].map((t) => String(t)),
-      correct_index: 0,
-      difficulty: dist[i],
-      topic,
-      source,
-    });
-    if (candidates.length === 0) {
-      result[result.length - 1].question_text = `"${topic}" mavzusida matnning ${chunk.page || ""}-sahifasidagi ma'lumot qaysi tushunchaga oid?`;
+    if (!chosen) break;
+    usedSentences.add(chosen.sentence);
+    const { chunk, sentence } = chosen;
+    const source = chunkToSource(chunk);
+    const year = extractDatesSentence(sentence);
+    const noun = pickProperNoun(sentence);
+    const term = pickKeyTerm(chunk);
+
+    if (year && dist[i] !== "hard") {
+      const blanked = clozeSentence(sentence, year);
+      const options = fillDistractors(year, nearYears(year));
+      result.push({
+        question_text: `Quyidagi gapda qaysi yil ko'rsatilgan?\n"${blanked}"`,
+        options: [year, ...options].map((t) => String(t)),
+        correct_index: 0,
+        difficulty: dist[i],
+        topic,
+        source,
+      });
+    } else if (term && dist[i] === "hard") {
+      const options = fillDistractors(term, chunks.map((c) => pickKeyTerm(c)).filter(Boolean));
+      result.push({
+        question_text: `Qaysi atama "${topic}" mavzusi bilan bevosita bog'liq?`,
+        options: [term, ...options].map((t) => String(t)),
+        correct_index: 0,
+        difficulty: dist[i],
+        topic,
+        source,
+      });
+    } else if (noun) {
+      const blanked = clozeSentence(sentence, noun);
+      const localPool = sentence.split(/\s+/).map(cleanToken).filter((w) => w.length >= 4 && isCyrToken(w));
+      const globalPool = chunks.flatMap((c) => (c.content || "").split(/\s+/)).map(cleanToken).filter((w) => w.length >= 4 && /^[А-ЯЁЎҚҒҲ]/.test(w) && isCyrToken(w));
+      const options = fillDistractors(noun, [...localPool, ...shuffle(globalPool).slice(0, 40)]);
+      result.push({
+        question_text: `Bo'sh joyni to'ldiring:\n"${blanked}"`,
+        options: [noun, ...options].map((t) => String(t)),
+        correct_index: 0,
+        difficulty: dist[i],
+        topic,
+        source,
+      });
+    } else {
+      const key = pickKeyTerm(chunk) || topic;
+      const options = fillDistractors(key, chunks.map((c) => pickKeyTerm(c)).filter(Boolean));
+      result.push({
+        question_text: `Darslikning ${source.page || "?"}-sahifasidagi matn qaysi tushunchaga oid?`,
+        options: [key, ...options].map((t) => String(t)),
+        correct_index: 0,
+        difficulty: dist[i],
+        topic,
+        source,
+      });
     }
   }
   return result;
