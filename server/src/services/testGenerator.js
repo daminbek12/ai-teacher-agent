@@ -4,6 +4,7 @@ import { searchKnowledgeBase } from "./textbook.js";
 import { runTestQc } from "./qc.js";
 import { logAudit } from "./audit.js";
 import { getCached, setCached, hashInput } from "./cache.js";
+import { pickQuestionsFromBank, markBankUsed, loadBankFromFile } from "./questionBank.js";
 
 function shuffle(arr) {
   const a = [...arr];
@@ -194,14 +195,27 @@ function generateQuestionsLocal({ topic, subject, count, difficulties, exclude }
   return result;
 }
 
-export async function generateTestQuestions(teacherId, { topic, subject = "Tarix", classLevel = "7", count = 20, difficulties = { easy: 30, medium: 50, hard: 20 }, questionTypes = null, localOnly = false }) {
+export async function generateTestQuestions(teacherId, { topic, subject = "Tarix", classLevel = "7", count = 20, difficulties = { easy: 30, medium: 50, hard: 20 }, questionTypes = null, localOnly = false, useBank = true }) {
   const used = getUsedQuestionTexts(teacherId, topic);
   let questions = [];
+  const bankIds = [];
 
-  try {
-    const ragQuestions = await generateRagQuestions(teacherId, { topic, subject, grade: classLevel, count, difficulties, localOnly });
-    if (ragQuestions && ragQuestions.length) questions = ragQuestions;
-  } catch {}
+  if (useBank && /tarix|tarikh|history|tarixi/i.test(subject || "Tarix")) {
+    try {
+      const bankQuestions = pickQuestionsFromBank({ subject: "Tarix", topic, count, difficulties, exclude: used });
+      for (const q of bankQuestions) {
+        questions.push(q);
+        if (q.bankId) bankIds.push(q.bankId);
+      }
+    } catch {}
+  }
+
+  if (questions.length < count) {
+    try {
+      const ragQuestions = await generateRagQuestions(teacherId, { topic, subject, grade: classLevel, count: count - questions.length, difficulties, localOnly });
+      if (ragQuestions && ragQuestions.length) questions = questions.concat(ragQuestions);
+    } catch {}
+  }
 
   if (questions.length === 0) {
     if (aiEnabled && !localOnly) {
@@ -219,7 +233,13 @@ export async function generateTestQuestions(teacherId, { topic, subject = "Tarix
   }
 
   const usedSet = new Set(used);
-  const unique = questions.filter((q) => !usedSet.has(q.question_text.trim().toLowerCase()));
+  const unique = [];
+  for (const q of questions) {
+    const key = q.question_text.trim().toLowerCase();
+    if (usedSet.has(key)) continue;
+    unique.push(q);
+    usedSet.add(key);
+  }
   let attempts = 0;
   while (unique.length < count && attempts < 5 && !localOnly) {
     attempts++;
@@ -229,14 +249,13 @@ export async function generateTestQuestions(teacherId, { topic, subject = "Tarix
     unique.push(...added);
     added.forEach((q) => usedSet.add(q.question_text.trim().toLowerCase()));
   }
-  return unique.slice(0, count).map((q) => {
+  const finalQuestions = unique.slice(0, count).map((q) => {
     const options = normalizeOptions(q.options);
     const letters = ["A", "B", "C", "D"];
     const correctIndex = q.correct_index != null ? q.correct_index : 0;
-    const lettersShuffled = letters.map((l, i) => ({ letter: l, index: i }));
-    const order = shuffle(lettersShuffled);
-    const orderedOptions = order.map((o) => options.find((op) => op.letter === letters[o.index]) || options[o.index]);
-    const correctLetter = order.find((o) => o.index === correctIndex).letter;
+    const indices = shuffle(options.map((_, i) => i));
+    const orderedOptions = indices.map((idx, pos) => ({ letter: letters[pos], text: options[idx] ? options[idx].text : "" }));
+    const correctLetter = letters[indices.indexOf(correctIndex)];
     return {
       question_text: q.question_text,
       options: orderedOptions,
@@ -244,8 +263,11 @@ export async function generateTestQuestions(teacherId, { topic, subject = "Tarix
       difficulty: q.difficulty,
       topic: q.topic || topic,
       source: q.source || null,
+      bankId: q.bankId || null,
     };
   });
+  markBankUsed(bankIds.filter((id) => finalQuestions.some((q) => q.bankId === id)));
+  return finalQuestions;
 }
 
 export function createTestRecord(teacherId, data) {
@@ -551,9 +573,9 @@ export function createVariants(teacherId, testId, variantCount = 3) {
       const options = JSON.parse(q.options_json);
       const letters = ["A", "B", "C", "D"];
       const correctIndex = letters.indexOf(q.correct_answer);
-      const order = shuffle(letters.map((l, i) => ({ letter: l, index: i })));
-      const orderedOptions = order.map((o) => options.find((op) => op.letter === letters[o.index]) || options[o.index]);
-      const newCorrect = order.find((o) => o.index === correctIndex).letter;
+      const indices = shuffle(options.map((_, i) => i));
+      const orderedOptions = indices.map((idx, pos) => ({ letter: letters[pos], text: options[idx] ? options[idx].text : "" }));
+      const newCorrect = letters[indices.indexOf(correctIndex)];
       return {
         ...q,
         options_json: JSON.stringify(orderedOptions),

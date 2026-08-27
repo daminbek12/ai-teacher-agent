@@ -324,6 +324,20 @@ CREATE TABLE IF NOT EXISTS question_reviews (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS question_bank (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  subject TEXT DEFAULT 'Tarix',
+  topic TEXT DEFAULT '',
+  grade TEXT DEFAULT '',
+  question_text TEXT NOT NULL,
+  options_json TEXT NOT NULL,
+  correct_index INTEGER NOT NULL,
+  source TEXT DEFAULT '',
+  used_count INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(question_text)
+);
+
 CREATE TABLE IF NOT EXISTS test_preparations (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   teacher_id INTEGER NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
