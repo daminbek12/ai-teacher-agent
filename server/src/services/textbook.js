@@ -204,7 +204,43 @@ export function importStructuredJson(teacherId, { title, grade, edition_year = "
   }
 
   const result = indexTextbookContent(teacherId, tb.id, { chapters, lessons, chunks });
-  return { skipped: false, textbook_id: tb.id, pages, ...result };
+  const topicCount = syncLessonsToTopics(teacherId, grade, lessons);
+  return { skipped: false, textbook_id: tb.id, pages, ...result, topics: topicCount };
+}
+
+export function cleanTopicTitle(raw) {
+  let t = (raw || "").replace(/\s+/g, " ").trim();
+  if (!t) return "";
+  const isCapsWord = (w) => /[A-ZА-ЯЁЎҚҒҲ]/.test(w) && !/[a-zа-яёўқғҳ]/.test(w);
+  let capsCount = 0;
+  for (const tok of t.split(" ")) {
+    if (isCapsWord(tok)) capsCount++;
+    else break;
+  }
+  if (capsCount >= 2 && capsCount < t.split(" ").length) {
+    const cut = t.split(" ").slice(0, capsCount).join(" ");
+    return cut.replace(/[.,;:\s]+$/, "").trim();
+  }
+  return t;
+}
+
+export function syncLessonsToTopics(teacherId, grade, lessons) {
+  const classRow = db.prepare(`SELECT id FROM classes WHERE teacher_id = ? AND name = ?`).get(teacherId, `${grade}-sinf`);
+  if (!classRow || !lessons || !lessons.length) return 0;
+  const existing = new Set(
+    db.prepare(`SELECT title FROM topics WHERE teacher_id = ? AND class_id = ?`).all(teacherId, classRow.id).map((r) => r.title.trim().toLowerCase())
+  );
+  const insert = db.prepare(`INSERT INTO topics (teacher_id, class_id, title, description, order_no, status) VALUES (?, ?, ?, '', ?, 'pending')`);
+  let count = 0;
+  lessons.forEach((l, i) => {
+    const title = cleanTopicTitle(l.title);
+    if (!title || existing.has(title.toLowerCase())) return;
+    insert.run(teacherId, classRow.id, title, i + 1);
+    existing.add(title.toLowerCase());
+    count++;
+  });
+  if (count) logAudit(teacherId, { action: "topics.syncFromTextbook", entityType: "class", entityId: classRow.id, detail: { grade, added: count } });
+  return count;
 }
 
 const CYR_TO_LAT = {

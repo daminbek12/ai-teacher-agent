@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import bcrypt from "bcryptjs";
 import db from "./src/db/index.js";
 import { seedDefaultHolidays } from "./src/services/planner.js";
-import { importStructuredJson } from "./src/services/textbook.js";
+import { importStructuredJson, syncLessonsToTopics } from "./src/services/textbook.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -59,5 +59,19 @@ if (fs.existsSync(manifestPath)) {
     }
   }
 }
+
+// 5. Backfill: allaqachon import qilingan darsliklarning mavzularini topics jadvaliga sinxronlash
+const textbookRows = db.prepare(`SELECT id, grade, title FROM textbooks WHERE teacher_id = ?`).all(teacher.id);
+const backfill = new Map();
+for (const tb of textbookRows) {
+  const lessons = db.prepare(`SELECT lesson_no, title FROM lessons WHERE textbook_id = ? AND teacher_id = ? ORDER BY lesson_no`).all(tb.id, teacher.id);
+  if (!backfill.has(tb.grade)) backfill.set(tb.grade, []);
+  backfill.get(tb.grade).push(...lessons);
+}
+let backfilled = 0;
+for (const [grade, lessons] of backfill) {
+  backfilled += syncLessonsToTopics(teacher.id, grade, lessons);
+}
+if (backfilled) console.log(`topics backfill: ${backfilled} ta mavzu qo'shildi`);
 
 console.log("Bootstrap tugadi. Login: Tarix ustozi /", password);
