@@ -1,0 +1,80 @@
+[
+ {
+  "file": "5_sinf_tarixdan_hikoyalar.json",
+  "title": "Tarixdan hikoyalar (5-sinf)",
+  "grade": "5",
+  "edition_year": ""
+ },
+ {
+  "file": "6_sinf_tarix_2022.json",
+  "title": "Tarix yangi darslik (6-sinf, 2022)",
+  "grade": "6",
+  "edition_year": "2022"
+ },
+ {
+  "file": "7_sinf_jahon_tarixi_2022.json",
+  "title": "Jahon tarixi (7-sinf, 2022)",
+  "grade": "7",
+  "edition_year": "2022"
+ },
+ {
+  "file": "7_sinf_uzbekiston_tarixi_2022.json",
+  "title": "O‘zbekiston tarixi (7-sinf, 2022)",
+  "grade": "7",
+  "edition_year": "2022"
+ },
+ {
+  "file": "8_sinf_jahon_tarixi_2024.json",
+  "title": "Jahon tarixi (8-sinf, 2024)",
+  "grade": "8",
+  "edition_year": "2024"
+ },
+ {
+  "file": "8_sinf_uzbekiston_tarixi.json",
+  "title": "O‘zbekiston tarixi (8-sinf)",
+  "grade": "8",
+  "edition_year": ""
+ },
+ {
+  "file": "9_sinf_jahon_tarixi_2024.json",
+  "title": "Jahon tarixi (9-sinf, 2024)",
+  "grade": "9",
+  "edition_year": "2024"
+ },
+ {
+  "file": "9_sinf_uzbekiston_tarixi_2024.json",
+  "title": "O‘zbekiston tarixi (9-sinf, 2024)",
+  "grade": "9",
+  "edition_year": "2024"
+ },
+ {
+  "file": "10_sinf_uzbekiston_tarixi.json",
+  "title": "O‘zbekiston tarixi (10-sinf)",
+  "grade": "10",
+  "edition_year": ""
+ },
+ {
+  "file": "10_sinf_jahon_tarixi_2022.json",
+  "title": "Jahon tarixi (10-sinf, 2022)",
+  "grade": "10",
+  "edition_year": "2022"
+ },
+ {
+  "file": "10_sinf_jahon_tarixi_keng.json",
+  "title": "Jahon tarixi (10-sinf, batafsil)",
+  "grade": "10",
+  "edition_year": ""
+ },
+ {
+  "file": "11_sinf_uzbekiston_tarixi_2025.json",
+  "title": "O‘zbekiston tarixi (11-sinf, 2025)",
+  "grade": "11",
+  "edition_year": "2025"
+ },
+ {
+  "file": "11_sinf_jahon_tarixi_2025.json",
+  "title": "Jahon tarixi (11-sinf, 2025)",
+  "grade": "11",
+  "edition_year": "2025"
+ }
+]

@@ -143,6 +143,70 @@ export function indexTextbookContent(teacherId, textbookId, { chapters, lessons,
   return { chapters: chapters?.length || 0, lessons: lessons?.length || 0, chunks: chunks.length };
 }
 
+export function importStructuredJson(teacherId, { title, grade, edition_year = "", data }) {
+  const existing = db.prepare(`SELECT id FROM textbooks WHERE teacher_id = ? AND title = ?`).get(teacherId, title);
+  if (existing) return { skipped: true, textbook_id: existing.id, reason: "allaqachon mavjud" };
+
+  const structure = data.structure || [];
+  const pages = data.page_count || 0;
+  const tb = createTextbook(teacherId, { subject: "Tarix", grade, title, edition_year, pages, status: "pending_review" });
+  addTextbookVersion(teacherId, tb.id, { version: `v${edition_year || "1"}`, edition_year, source: "structured_json", isActive: true });
+
+  const chapters = [];
+  const lessons = [];
+  const chunks = [];
+  let chapterNo = 0;
+  let lessonNo = 0;
+
+  for (const item of structure) {
+    if (item.type === "kirish" && item.text) {
+      chunks.push({ content: item.text, page: item.page_start || 0, keywords: "kirish" });
+    } else if (item.type === "bob") {
+      chapterNo++;
+      chapters.push({
+        chapter_no: chapterNo,
+        title: (item.title || "").trim(),
+        page_start: item.page_start || 0,
+        page_end: item.page_end || 0,
+        summary: item.kirish_text || "",
+      });
+      if (item.kirish_text) chunks.push({ content: `${item.title}\n${item.kirish_text}`, page: item.page_start || 0, keywords: "" });
+      for (const topic of item.topics || []) {
+        lessonNo++;
+        lessons.push({
+          chapter_no: chapterNo,
+          lesson_no: lessonNo,
+          title: (topic.title || "").trim(),
+          page_start: topic.page_start || 0,
+          page_end: topic.page_end || 0,
+          summary: (topic.text || "").slice(0, 2000),
+          keywords: (topic.keywords || []).join(", "),
+        });
+        if (topic.text) {
+          for (const c of chunkText(topic.text, { chunkSize: 900, overlap: 80 })) {
+            chunks.push({ content: c, page: topic.page_start || 0, keywords: topic.title || "" });
+          }
+        }
+      }
+    } else if (item.type === "mavzu" && item.text) {
+      lessonNo++;
+      lessons.push({
+        lesson_no: lessonNo,
+        title: (item.title || "").trim(),
+        page_start: item.page_start || 0,
+        page_end: item.page_end || 0,
+        summary: item.text.slice(0, 2000),
+      });
+      for (const c of chunkText(item.text, { chunkSize: 900, overlap: 80 })) {
+        chunks.push({ content: c, page: item.page_start || 0, keywords: item.title || "" });
+      }
+    }
+  }
+
+  const result = indexTextbookContent(teacherId, tb.id, { chapters, lessons, chunks });
+  return { skipped: false, textbook_id: tb.id, pages, ...result };
+}
+
 const CYR_TO_LAT = {
   а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ё: "yo", ж: "j", з: "z", и: "i", й: "y",
   к: "k", л: "l", м: "m", н: "n", о: "o", п: "p", р: "r", с: "s", т: "t", у: "u", ф: "f",
