@@ -66,6 +66,20 @@ router.post("/textbooks/:id/versions/:versionId/activate", (req, res) => {
 
 const UPLOAD_CHUNK_DIR = process.env.UPLOAD_CHUNK_DIR || "/tmp/teacher_upload_chunks";
 
+function extractJsonTextbookContent(buffer) {
+  const data = JSON.parse(buffer.toString("utf8"));
+  if (typeof data === "string") return data;
+  const parts = [];
+  if (data.content) parts.push(data.content);
+  for (const l of data.lessons || data.darslar || []) {
+    if (l.title) parts.push(`\n${l.lesson_no ?? ""}-dars. ${l.title}`);
+    if (l.summary) parts.push(l.summary);
+    if (l.keywords) parts.push(l.keywords);
+    if (l.content) parts.push(l.content);
+  }
+  return parts.join("\n");
+}
+
 function getChunkDir(uploadId) {
   return path.join(UPLOAD_CHUNK_DIR, String(uploadId));
 }
@@ -102,6 +116,8 @@ async function processUploadedBuffer(teacherId, { buffer, file_name, subject, gr
     }
   } else if (mime === "text/plain") {
     fullText = buffer.toString("utf8");
+  } else if (mime === "application/json") {
+    fullText = extractJsonTextbookContent(buffer);
   } else if (mime === "application/zip") {
     const result = extractZip(buffer);
     if (!result.ok) {

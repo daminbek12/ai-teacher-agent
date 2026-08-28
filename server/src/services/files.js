@@ -13,7 +13,7 @@ const MAX_FILE_SIZE = 50 * 1024 * 1024;
 const ALLOWED_MIME = new Set([
   "image/jpeg", "image/png", "image/webp", "application/pdf",
   "application/zip", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "text/plain",
+  "text/plain", "application/json",
 ]);
 
 const EXT_MIME = {
@@ -21,6 +21,7 @@ const EXT_MIME = {
   ".webp": "image/webp", ".pdf": "application/pdf", ".zip": "application/zip",
   ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   ".txt": "text/plain",
+  ".json": "application/json",
 };
 
 const DANGEROUS_EXT = new Set([

@@ -283,8 +283,8 @@ export default function Textbooks() {
 
       <Modal open={showUpload} onClose={() => setShowUpload(false)} title="Yangi darslik">
         <form onSubmit={upload}>
-          <Field label="Fayl (PDF/ZIP/rasm) yoki bo'sh qoldiring">
-            <input type="file" accept=".pdf,.zip,.docx,.jpg,.jpeg,.png,.webp" onChange={(e) => setFile(e.target.files?.[0] || null)}
+          <Field label="Fayl (PDF/ZIP/DOCX/JSON/rasm) yoki bo'sh qoldiring">
+            <input type="file" accept=".pdf,.zip,.docx,.json,.txt,.jpg,.jpeg,.png,.webp" onChange={(e) => setFile(e.target.files?.[0] || null)}
               className="w-full text-sm" />
           </Field>
           <div className="grid grid-cols-2 gap-3">
