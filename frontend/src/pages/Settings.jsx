@@ -87,7 +87,7 @@ export default function Settings() {
             </Field>
           </Card>
 
-          <Card title="Kunlik test" subtitle="Har kuni barcha sinflar uchun avtomatik qisqa test">
+          <Card title="Kunlik test" subtitle="Har kuni dars jadvali bo'yicha, darsi bor sinflar uchun avtomatik qisqa test">
             <label className="mb-3 flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2.5">
               <span className="text-sm text-gray-700">Kunlik test yoqilgan</span>
               <input
@@ -107,7 +107,7 @@ export default function Settings() {
                 </Select>
               </Field>
             </div>
-            <p className="mt-2 text-xs text-gray-500">Har kuni belgilangan vaqtda har bir sinf uchun darslik asosida qisqa test avtomatik yaratiladi. Bir kunda bir sinfga bitta kunlik test.</p>
+            <p className="mt-2 text-xs text-gray-500">Har kuni belgilangan vaqtda bugungi jadvalda darsi bor har bir sinf uchun joriy mavzu asosida qisqa test avtomatik yaratiladi. Jadvalda darsi bo'lmagan sinflarga test yaratilmaydi. Bir kunda bir sinfga bitta kunlik test.</p>
           </Card>
         </div>
 

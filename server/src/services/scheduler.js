@@ -5,16 +5,19 @@ import { createFullTest, createTestRecord, saveQuestions, generateTestQuestions 
 
 const dayNames = ["", "Dushanba", "Seshanba", "Chorshanba", "Payshanba", "Juma", "Shanba", "Yakshanba"];
 
-function getTodaySchedule() {
+function getTodaySchedule(teacherId = null) {
   const dayOfWeek = db.prepare(`SELECT CAST(strftime('%w', 'now', 'localtime') AS INTEGER) + 1 AS d`).get().d;
-  return db
-    .prepare(
-      `SELECT s.*, c.name AS class_name, c.subject
+  const sql = teacherId
+    ? `SELECT s.*, c.name AS class_name, c.subject
        FROM schedule s
        JOIN classes c ON c.id = s.class_id
-       WHERE s.day_of_week = ? ORDER BY s.start_time`
-    )
-    .all(dayOfWeek);
+       WHERE s.day_of_week = ? AND s.teacher_id = ?
+       ORDER BY s.start_time`
+    : `SELECT s.*, c.name AS class_name, c.subject
+       FROM schedule s
+       JOIN classes c ON c.id = s.class_id
+       WHERE s.day_of_week = ? ORDER BY s.start_time`;
+  return teacherId ? db.prepare(sql).all(dayOfWeek, teacherId) : db.prepare(sql).all(dayOfWeek);
 }
 
 function getTeacherSettings(teacherId) {
@@ -25,7 +28,7 @@ function getTeacherSettings(teacherId) {
 }
 
 export async function prepareMorningBriefing(teacherId) {
-  const lessons = getTodaySchedule();
+  const lessons = getTodaySchedule(teacherId);
   if (lessons.length === 0) return null;
 
   const settings = getTeacherSettings(teacherId);
@@ -162,7 +165,13 @@ export async function prepareDailyTest(teacherId) {
 
   const count = settings.daily_test_count || Math.min(settings.test_count || 10, 10);
   const today = db.prepare(`SELECT date('now', 'localtime') AS d`).get().d;
-  const classes = db.prepare(`SELECT * FROM classes WHERE teacher_id = ?`).all(teacherId);
+  const lessons = getTodaySchedule(teacherId);
+  if (lessons.length === 0) return [];
+
+  const classIds = [...new Set(lessons.map((l) => l.class_id))];
+  const classes = classIds
+    .map((id) => db.prepare(`SELECT * FROM classes WHERE id = ?`).get(id))
+    .filter(Boolean);
   const created = [];
 
   for (const cls of classes) {
@@ -172,15 +181,16 @@ export async function prepareDailyTest(teacherId) {
     if (existing) continue;
 
     const topicInfo = db
-      .prepare(`SELECT * FROM topics WHERE class_id = ? AND status IN ('pending','in_progress','done') ORDER BY CASE status WHEN 'in_progress' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END, order_no DESC LIMIT 1`)
+      .prepare(`SELECT * FROM topics WHERE class_id = ? AND status IN ('pending','in_progress') ORDER BY CASE status WHEN 'in_progress' THEN 0 ELSE 1 END, order_no LIMIT 1`)
       .get(cls.id);
+    if (!topicInfo) continue;
 
     try {
       const test = await createFullTest(teacherId, {
         class_id: cls.id,
-        title: `Kunlik test: ${cls.name} (${today})`,
+        title: `Kunlik test: ${cls.name} - ${topicInfo.title} (${today})`,
         type: "daily",
-        topic: topicInfo ? topicInfo.title : "",
+        topic: topicInfo.title,
         question_count: count,
         subject: cls.subject || "Tarix",
         local_only: true,

@@ -10,8 +10,15 @@ export function getState(chatId, key = null) {
   return key ? s[key] : s;
 }
 
-export function clearState(chatId) {
-  state.delete(chatId);
+export function clearState(chatId, key = null) {
+  if (key == null) {
+    state.delete(chatId);
+    return;
+  }
+  const s = state.get(chatId);
+  if (s && key in s) {
+    delete s[key];
+  }
 }
 
 export function hasState(chatId, key) {
