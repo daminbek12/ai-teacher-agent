@@ -27,6 +27,7 @@ const typeColors = {
 export default function Tests() {
   const [tests, setTests] = useState([]);
   const [classes, setClasses] = useState([]);
+  const [topics, setTopics] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [dailyBusy, setDailyBusy] = useState(false);
@@ -52,6 +53,18 @@ export default function Tests() {
   };
 
   useEffect(() => { load(); }, []);
+
+  const onClassChange = async (e) => {
+    const classId = e.target.value;
+    setForm((p) => ({ ...p, class_id: classId, topic: "" }));
+    if (!classId) return setTopics([]);
+    try {
+      const list = await api(`/topics?class_id=${classId}`);
+      setTopics(list);
+    } catch {
+      setTopics([]);
+    }
+  };
 
   const create = async (e) => {
     e.preventDefault();
@@ -162,12 +175,12 @@ export default function Tests() {
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Yangi test yaratish" wide>
         <form onSubmit={create} className="space-y-3">
           <div className="grid gap-3 md:grid-cols-2">
-            <Field label="Sinf">
-              <Select required value={form.class_id} onChange={set("class_id")}>
-                <option value="">Sinf tanlang</option>
-                {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </Select>
-            </Field>
+          <Field label="Sinf">
+            <Select required value={form.class_id} onChange={onClassChange}>
+              <option value="">Sinf tanlang</option>
+              {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </Select>
+          </Field>
             <Field label="Test turi">
               <Select value={form.type} onChange={set("type")}>
                 {Object.entries(typeLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -178,7 +191,17 @@ export default function Tests() {
             <Input required value={form.title} onChange={set("title")} placeholder="Masalan: Amir Temur davlati testi" />
           </Field>
           <Field label="Mavzu">
-            <Input value={form.topic} onChange={set("topic")} placeholder="Masalan: Amir Temur davlati" />
+            {form.class_id ? (
+              <Select value={form.topic} onChange={set("topic")}>
+                <option value="">Mavzu tanlang</option>
+                {topics.map((t) => <option key={t.id} value={t.title}>{t.title}</option>)}
+              </Select>
+            ) : (
+              <Input value={form.topic} onChange={set("topic")} placeholder="Avval sinf tanlang" disabled />
+            )}
+            {form.class_id && topics.length === 0 && (
+              <p className="mt-1 text-xs text-amber-600">Bu sinf uchun mavzular bazada topilmadi (Mavzular bo'limidan qo'shing)</p>
+            )}
           </Field>
           <div className="grid gap-3 md:grid-cols-2">
             <Field label="Savollar soni">
