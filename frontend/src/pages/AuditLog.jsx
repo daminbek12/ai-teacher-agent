@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api.js";
-import { Card, Badge, Spinner, Empty } from "../components/ui.jsx";
+import { Card, Badge, PageSkeleton, Empty } from "../components/ui.jsx";
 
-const STATUS_COLORS = { ok: "green", error: "red", warn: "amber" };
+const STATUS_COLORS = { ok: "success", error: "danger", warn: "warning" };
 
 export default function AuditLog() {
   const [logs, setLogs] = useState([]);
@@ -12,42 +12,42 @@ export default function AuditLog() {
     api("/audit?limit=100").then((d) => { setLogs(d); setLoading(false); });
   }, []);
 
-  if (loading) return <Spinner />;
+  if (loading) return <PageSkeleton />;
 
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Audit log</h1>
-        <p className="text-sm text-gray-500">Tizimdagi har bir avtomatik amal qayd etiladi</p>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-h1">Audit log</h1>
+        <p className="mt-1 text-body-sm">Tizimdagi har bir avtomatik amal qayd etiladi</p>
       </div>
 
       <Card>
         {logs.length === 0 ? (
-          <Empty text="Hozircha amal qaydlari yo'q" />
+          <Empty icon="data" text="Hozircha amal qaydlari yo'q. Tizim ishlagani sari bu yerda ko'rinadi." />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="-mx-5 overflow-x-auto px-5">
+            <table className="w-full min-w-[720px] text-sm">
               <thead>
-                <tr className="border-b border-gray-200 text-left text-xs uppercase text-gray-400">
-                  <th className="pb-2">Vaqt</th>
-                  <th className="pb-2">Amal</th>
-                  <th className="pb-2">Obyekt</th>
-                  <th className="pb-2">Model</th>
-                  <th className="pb-2">Holat</th>
-                  <th className="pb-2">Tafsilot</th>
+                <tr className="border-b border-stone-200 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  <th className="pb-2.5 pr-3">Vaqt</th>
+                  <th className="pb-2.5 pr-3">Amal</th>
+                  <th className="pb-2.5 pr-3">Obyekt</th>
+                  <th className="pb-2.5 pr-3">Model</th>
+                  <th className="pb-2.5 pr-3">Holat</th>
+                  <th className="pb-2.5">Tafsilot</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
-                {logs.map((log) => (
-                  <tr key={log.id}>
-                    <td className="py-2.5 text-gray-500">{log.created_at}</td>
-                    <td className="py-2.5 font-medium text-gray-800">{log.action}</td>
-                    <td className="py-2.5 text-gray-600">{log.entity_type}{log.entity_id ? ` #${log.entity_id}` : ""}</td>
-                    <td className="py-2.5 text-gray-500">{log.model || "—"}</td>
-                    <td className="py-2.5">
-                      <Badge color={STATUS_COLORS[log.status] || "gray"}>{log.status}</Badge>
+              <tbody className="divide-y divide-stone-100">
+                {logs.map((log, i) => (
+                  <tr key={log.id} className="stagger-item transition-colors hover:bg-stone-50/60" style={{ animationDelay: `${Math.min(i, 10) * 20}ms` }}>
+                    <td className="py-2.5 pr-3 whitespace-nowrap text-slate-500"><time>{(log.created_at || "").slice(0, 16).replace("T", " ")}</time></td>
+                    <td className="py-2.5 pr-3 font-medium text-slate-800">{log.action}</td>
+                    <td className="py-2.5 pr-3 text-slate-600">{log.entity_type}{log.entity_id ? ` #${log.entity_id}` : ""}</td>
+                    <td className="py-2.5 pr-3 text-slate-500">{log.model || "—"}</td>
+                    <td className="py-2.5 pr-3">
+                      <Badge color={STATUS_COLORS[log.status] || "neutral"}>{log.status}</Badge>
                     </td>
-                    <td className="py-2.5 max-w-xs truncate text-gray-500">{parseDetail(log.detail)}</td>
+                    <td className="max-w-xs truncate py-2.5 text-slate-500">{parseDetail(log.detail)}</td>
                   </tr>
                 ))}
               </tbody>
