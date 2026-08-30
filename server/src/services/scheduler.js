@@ -8,12 +8,12 @@ const dayNames = ["", "Dushanba", "Seshanba", "Chorshanba", "Payshanba", "Juma",
 function getTodaySchedule(teacherId = null) {
   const dayOfWeek = db.prepare(`SELECT CAST(strftime('%w', 'now', 'localtime') AS INTEGER) + 1 AS d`).get().d;
   const sql = teacherId
-    ? `SELECT s.*, c.name AS class_name, c.subject
+    ? `SELECT s.*, c.name AS class_name, c.subject AS class_subject
        FROM schedule s
        JOIN classes c ON c.id = s.class_id
        WHERE s.day_of_week = ? AND s.teacher_id = ?
        ORDER BY s.start_time`
-    : `SELECT s.*, c.name AS class_name, c.subject
+    : `SELECT s.*, c.name AS class_name, c.subject AS class_subject
        FROM schedule s
        JOIN classes c ON c.id = s.class_id
        WHERE s.day_of_week = ? ORDER BY s.start_time`;
@@ -53,9 +53,10 @@ export async function prepareMorningBriefing(teacherId) {
       topic: lesson.subject || "Tarix",
     });
 
+    const lessonSubject = lesson.subject || "Tarix";
     const topicInfo = db
-      .prepare(`SELECT * FROM topics WHERE class_id = ? AND status = 'pending' ORDER BY order_no LIMIT 1`)
-      .get(lesson.class_id);
+      .prepare(`SELECT * FROM topics WHERE class_id = ? AND status = 'pending' AND (subject = ? OR subject = '' OR subject IS NULL) ORDER BY order_no LIMIT 1`)
+      .get(lesson.class_id, lessonSubject);
     if (topicInfo) {
       const testCount = settings.test_count || 20;
       const test = createTestRecord(teacherId, {
@@ -63,11 +64,12 @@ export async function prepareMorningBriefing(teacherId) {
         title: `${topicInfo.title} - mini test`,
         type: "topic",
         topic: topicInfo.title,
+        subject: lessonSubject,
         question_count: Math.min(testCount, 10),
       });
       const questions = await generateTestQuestions(teacherId, {
         topic: topicInfo.title,
-        subject: lesson.subject || "Tarix",
+        subject: lessonSubject,
         count: Math.min(testCount, 10),
       });
       saveQuestions(teacherId, test.id, questions);
@@ -75,7 +77,7 @@ export async function prepareMorningBriefing(teacherId) {
       prepared.push({ test_id: test.id });
     }
 
-    db.prepare(`UPDATE topics SET status = 'in_progress' WHERE class_id = ? AND status = 'pending' LIMIT 1`).run(lesson.class_id);
+    db.prepare(`UPDATE topics SET status = 'in_progress' WHERE class_id = ? AND status = 'pending' AND (subject = ? OR subject = '' OR subject IS NULL) LIMIT 1`).run(lesson.class_id, lessonSubject);
     lines.push("");
   }
 
@@ -106,8 +108,8 @@ export function scheduleWeeklyTest(teacherId) {
       const classes = db.prepare(`SELECT * FROM classes WHERE teacher_id = ?`).all(teacherId);
       for (const cls of classes) {
         const topicInfo = db
-          .prepare(`SELECT * FROM topics WHERE class_id = ? AND status IN ('pending','in_progress') ORDER BY order_no LIMIT 1`)
-          .get(cls.id);
+          .prepare(`SELECT * FROM topics WHERE class_id = ? AND status IN ('pending','in_progress') AND (subject = ? OR subject = '' OR subject IS NULL) ORDER BY order_no LIMIT 1`)
+          .get(cls.id, cls.subject || "Tarix");
         if (!topicInfo) continue;
         const test = createFullTest(teacherId, {
           class_id: cls.id,
@@ -168,21 +170,28 @@ export async function prepareDailyTest(teacherId) {
   const lessons = getTodaySchedule(teacherId);
   if (lessons.length === 0) return [];
 
-  const classIds = [...new Set(lessons.map((l) => l.class_id))];
-  const classes = classIds
-    .map((id) => db.prepare(`SELECT * FROM classes WHERE id = ?`).get(id))
-    .filter(Boolean);
+  const uniqueLessons = [];
+  const seen = new Set();
+  for (const l of lessons) {
+    const subj = l.subject || l.class_subject || "Tarix";
+    const key = `${l.class_id}|${subj}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    uniqueLessons.push({ class_id: l.class_id, subject: subj });
+  }
   const created = [];
 
-  for (const cls of classes) {
+  for (const { class_id, subject } of uniqueLessons) {
+    const cls = db.prepare(`SELECT * FROM classes WHERE id = ?`).get(class_id);
+    if (!cls) continue;
     const existing = db
-      .prepare(`SELECT id FROM tests WHERE teacher_id = ? AND class_id = ? AND type = 'daily' AND date(created_at) = ?`)
-      .get(teacherId, cls.id, today);
+      .prepare(`SELECT id FROM tests WHERE teacher_id = ? AND class_id = ? AND type = 'daily' AND (subject = ? OR subject = '') AND date(created_at) = ?`)
+      .get(teacherId, cls.id, subject, today);
     if (existing) continue;
 
     const topicInfo = db
-      .prepare(`SELECT * FROM topics WHERE class_id = ? AND status IN ('pending','in_progress') ORDER BY CASE status WHEN 'in_progress' THEN 0 ELSE 1 END, order_no LIMIT 1`)
-      .get(cls.id);
+      .prepare(`SELECT * FROM topics WHERE class_id = ? AND status IN ('pending','in_progress') AND (subject = ? OR subject = '' OR subject IS NULL) ORDER BY CASE status WHEN 'in_progress' THEN 0 ELSE 1 END, order_no LIMIT 1`)
+      .get(cls.id, subject);
     if (!topicInfo) continue;
 
     try {
@@ -192,7 +201,7 @@ export async function prepareDailyTest(teacherId) {
         type: "daily",
         topic: topicInfo.title,
         question_count: count,
-        subject: cls.subject || "Tarix",
+        subject,
         local_only: true,
         skip_qc: true,
       });

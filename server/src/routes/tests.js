@@ -154,7 +154,7 @@ router.get("/:id/docx", async (req, res) => {
   const cls = db.prepare(`SELECT * FROM classes WHERE id = ?`).get(test.class_id);
   const buffer = await generateTestDocx({
     schoolName: req.user.school_name || "",
-    subject: cls?.subject || req.user.subject || "Tarix",
+    subject: test.subject || cls?.subject || req.user.subject || "Tarix",
     className: cls?.name || "",
     topic: test.topic || test.title,
     teacherName: req.user.name,
@@ -174,7 +174,7 @@ router.get("/:id/pdf", async (req, res) => {
   const cls = db.prepare(`SELECT * FROM classes WHERE id = ?`).get(test.class_id);
   const buffer = await generateTestPdf({
     schoolName: req.user.school_name || "",
-    subject: cls?.subject || req.user.subject || "Tarix",
+    subject: test.subject || cls?.subject || req.user.subject || "Tarix",
     className: cls?.name || "",
     topic: test.topic || test.title,
     teacherName: req.user.name,

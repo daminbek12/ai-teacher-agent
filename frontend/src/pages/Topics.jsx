@@ -4,6 +4,7 @@ import { Card, Button, Modal, Field, Input, Select, Badge, Spinner, Empty } from
 
 const statusColors = { pending: "amber", in_progress: "blue", done: "green" };
 const statusLabels = { pending: "Kutilmoqda", in_progress: "Jarayonda", done: "Tugallangan" };
+const subjects = ["O'zbekiston tarixi", "Jahon tarixi", "Tarix"];
 
 export default function Topics() {
   const [topics, setTopics] = useState([]);
@@ -11,8 +12,8 @@ export default function Topics() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [showBulk, setShowBulk] = useState(false);
-  const [form, setForm] = useState({ class_id: "", title: "", description: "" });
-  const [bulk, setBulk] = useState({ class_id: "", text: "" });
+  const [form, setForm] = useState({ class_id: "", title: "", description: "", subject: "O'zbekiston tarixi" });
+  const [bulk, setBulk] = useState({ class_id: "", text: "", subject: "O'zbekiston tarixi" });
 
   const load = async () => {
     const [t, c] = await Promise.all([api("/topics"), api("/classes")]);
@@ -28,16 +29,16 @@ export default function Topics() {
     const topic = await api("/topics", { method: "POST", body: form });
     setTopics((p) => [...p, topic]);
     setShowModal(false);
-    setForm({ class_id: "", title: "", description: "" });
+    setForm({ class_id: "", title: "", description: "", subject: "O'zbekiston tarixi" });
   };
 
   const createBulk = async (e) => {
     e.preventDefault();
     const titles = bulk.text.split("\n").map((t) => t.trim()).filter(Boolean);
-    await api("/topics/bulk", { method: "POST", body: { class_id: Number(bulk.class_id), titles } });
+    await api("/topics/bulk", { method: "POST", body: { class_id: Number(bulk.class_id), titles, subject: bulk.subject } });
     await load();
     setShowBulk(false);
-    setBulk({ class_id: "", text: "" });
+    setBulk({ class_id: "", text: "", subject: "O'zbekiston tarixi" });
   };
 
   const setStatus = async (id, status) => {
@@ -84,7 +85,10 @@ export default function Topics() {
                   {cls.topics.map((t) => (
                     <div key={t.id} className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2.5">
                       <div>
-                        <div className="text-sm font-medium text-gray-800">{t.title}</div>
+                        <div className="text-sm font-medium text-gray-800">
+                          {t.title}
+                          {t.subject && <span className="ml-2 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">{t.subject}</span>}
+                        </div>
                         {t.description && <div className="text-xs text-gray-500">{t.description}</div>}
                       </div>
                       <div className="flex items-center gap-2">
@@ -119,6 +123,11 @@ export default function Topics() {
           <Field label="Mavzu nomi">
             <Input required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Masalan: Amir Temur davlati" />
           </Field>
+          <Field label="Fan">
+            <Select value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })}>
+              {subjects.map((s) => <option key={s} value={s}>{s}</option>)}
+            </Select>
+          </Field>
           <Field label="Tavsif (ixtiyoriy)">
             <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
           </Field>
@@ -143,6 +152,11 @@ export default function Topics() {
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
               placeholder={"Amir Temur davlati\nTemuriylar sulolasi\nJahongir Mirzo\n..."}
             />
+          </Field>
+          <Field label="Fan">
+            <Select value={bulk.subject} onChange={(e) => setBulk({ ...bulk, subject: e.target.value })}>
+              {subjects.map((s) => <option key={s} value={s}>{s}</option>)}
+            </Select>
           </Field>
           <Button type="submit" className="w-full">Qo'shish</Button>
         </form>

@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS topics (
   class_id INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   description TEXT DEFAULT '',
+  subject TEXT DEFAULT '',
   order_no INTEGER DEFAULT 0,
   status TEXT DEFAULT 'pending',
   created_at TEXT DEFAULT (datetime('now'))
@@ -72,6 +73,7 @@ CREATE TABLE IF NOT EXISTS tests (
   title TEXT NOT NULL,
   type TEXT DEFAULT 'topic',
   topic TEXT DEFAULT '',
+  subject TEXT DEFAULT '',
   question_count INTEGER DEFAULT 20,
   difficulty_easy INTEGER DEFAULT 30,
   difficulty_medium INTEGER DEFAULT 50,
@@ -353,6 +355,16 @@ CREATE TABLE IF NOT EXISTS test_preparations (
 const questionsCols = db.prepare(`PRAGMA table_info(questions)`).all().map((c) => c.name);
 if (!questionsCols.includes("source_json")) {
   db.exec(`ALTER TABLE questions ADD COLUMN source_json TEXT DEFAULT '{}'`);
+}
+
+const topicsCols = db.prepare(`PRAGMA table_info(topics)`).all().map((c) => c.name);
+if (!topicsCols.includes("subject")) {
+  db.exec(`ALTER TABLE topics ADD COLUMN subject TEXT DEFAULT ''`);
+}
+
+const testsCols = db.prepare(`PRAGMA table_info(tests)`).all().map((c) => c.name);
+if (!testsCols.includes("subject")) {
+  db.exec(`ALTER TABLE tests ADD COLUMN subject TEXT DEFAULT ''`);
 }
 
 export default db;

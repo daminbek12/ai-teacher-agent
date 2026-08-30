@@ -495,8 +495,9 @@ function handleMenu(chatId, teacher, key) {
       if (!topics.length) return sendMessage(chatId, "Mavzular yo'q. Darslik yuklang — mavzular avtomatik qo'shiladi.");
       const grouped = {};
       topics.forEach((t) => {
-        if (!grouped[t.class_name]) grouped[t.class_name] = [];
-        grouped[t.class_name].push(`${t.order_no + 1}. ${t.title} [${t.status === "done" ? "✅" : t.status === "in_progress" ? "▶️" : "⏳"}]`);
+        const key = t.subject ? `${t.class_name} · ${t.subject}` : t.class_name;
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(`${t.order_no + 1}. ${t.title} [${t.status === "done" ? "✅" : t.status === "in_progress" ? "▶️" : "⏳"}]`);
       });
       let text = "🧩 Mavzular:\n";
       for (const [cls, list] of Object.entries(grouped)) text += `\n${cls} (${list.length}):\n${list.join("\n")}\n`;

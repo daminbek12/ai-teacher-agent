@@ -143,13 +143,21 @@ export function indexTextbookContent(teacherId, textbookId, { chapters, lessons,
   return { chapters: chapters?.length || 0, lessons: lessons?.length || 0, chunks: chunks.length };
 }
 
-export function importStructuredJson(teacherId, { title, grade, edition_year = "", data }) {
+export function detectSubject(title = "") {
+  const t = title.toLowerCase();
+  if (t.includes("jahon tarixi")) return "Jahon tarixi";
+  if (t.includes("o'zbekiston tarixi") || t.includes("ozbekiston tarixi") || t.includes("o‘zbekiston tarixi")) return "O'zbekiston tarixi";
+  return "Tarix";
+}
+
+export function importStructuredJson(teacherId, { title, grade, edition_year = "", data, subject }) {
   const existing = db.prepare(`SELECT id FROM textbooks WHERE teacher_id = ? AND title = ?`).get(teacherId, title);
   if (existing) return { skipped: true, textbook_id: existing.id, reason: "allaqachon mavjud" };
 
   const structure = data.structure || [];
   const pages = data.page_count || 0;
-  const tb = createTextbook(teacherId, { subject: "Tarix", grade, title, edition_year, pages, status: "pending_review" });
+  const subj = subject || detectSubject(title);
+  const tb = createTextbook(teacherId, { subject: subj, grade, title, edition_year, pages, status: "pending_review" });
   addTextbookVersion(teacherId, tb.id, { version: `v${edition_year || "1"}`, edition_year, source: "structured_json", isActive: true });
 
   const chapters = [];
@@ -204,7 +212,7 @@ export function importStructuredJson(teacherId, { title, grade, edition_year = "
   }
 
   const result = indexTextbookContent(teacherId, tb.id, { chapters, lessons, chunks });
-  const topicCount = syncLessonsToTopics(teacherId, grade, lessons);
+  const topicCount = syncLessonsToTopics(teacherId, grade, lessons, subj);
   return { skipped: false, textbook_id: tb.id, pages, ...result, topics: topicCount };
 }
 
@@ -224,22 +232,22 @@ export function cleanTopicTitle(raw) {
   return t;
 }
 
-export function syncLessonsToTopics(teacherId, grade, lessons) {
+export function syncLessonsToTopics(teacherId, grade, lessons, subject = "Tarix") {
   const classRow = db.prepare(`SELECT id FROM classes WHERE teacher_id = ? AND name = ?`).get(teacherId, `${grade}-sinf`);
   if (!classRow || !lessons || !lessons.length) return 0;
   const existing = new Set(
-    db.prepare(`SELECT title FROM topics WHERE teacher_id = ? AND class_id = ?`).all(teacherId, classRow.id).map((r) => r.title.trim().toLowerCase())
+    db.prepare(`SELECT title, subject FROM topics WHERE teacher_id = ? AND class_id = ?`).all(teacherId, classRow.id).map((r) => `${(r.subject || "").toLowerCase()}|${r.title.trim().toLowerCase()}`)
   );
-  const insert = db.prepare(`INSERT INTO topics (teacher_id, class_id, title, description, order_no, status) VALUES (?, ?, ?, '', ?, 'pending')`);
+  const insert = db.prepare(`INSERT INTO topics (teacher_id, class_id, title, description, subject, order_no, status) VALUES (?, ?, ?, '', ?, ?, 'pending')`);
   let count = 0;
   lessons.forEach((l, i) => {
     const title = cleanTopicTitle(l.title);
-    if (!title || existing.has(title.toLowerCase())) return;
-    insert.run(teacherId, classRow.id, title, i + 1);
-    existing.add(title.toLowerCase());
+    if (!title || existing.has(`${subject.toLowerCase()}|${title.toLowerCase()}`)) return;
+    insert.run(teacherId, classRow.id, title, subject, i + 1);
+    existing.add(`${subject.toLowerCase()}|${title.toLowerCase()}`);
     count++;
   });
-  if (count) logAudit(teacherId, { action: "topics.syncFromTextbook", entityType: "class", entityId: classRow.id, detail: { grade, added: count } });
+  if (count) logAudit(teacherId, { action: "topics.syncFromTextbook", entityType: "class", entityId: classRow.id, detail: { grade, subject, added: count } });
   return count;
 }
 

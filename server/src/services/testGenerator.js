@@ -271,13 +271,13 @@ export async function generateTestQuestions(teacherId, { topic, subject = "Tarix
 }
 
 export function createTestRecord(teacherId, data) {
-  const { class_id, title, type = "topic", topic = "", question_count = 20, duration_minutes = 25, difficulty_easy = 30, difficulty_medium = 50, difficulty_hard = 20, scheduled_for = null } = data;
+  const { class_id, title, type = "topic", topic = "", subject = "", question_count = 20, duration_minutes = 25, difficulty_easy = 30, difficulty_medium = 50, difficulty_hard = 20, scheduled_for = null } = data;
   const info = db
     .prepare(
-      `INSERT INTO tests (teacher_id, class_id, title, type, topic, question_count, duration_minutes, difficulty_easy, difficulty_medium, difficulty_hard, scheduled_for)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO tests (teacher_id, class_id, title, type, topic, subject, question_count, duration_minutes, difficulty_easy, difficulty_medium, difficulty_hard, scheduled_for)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
-    .run(teacherId, class_id, title, type, topic, question_count, duration_minutes, difficulty_easy, difficulty_medium, difficulty_hard, scheduled_for);
+    .run(teacherId, class_id, title, type, topic, subject, question_count, duration_minutes, difficulty_easy, difficulty_medium, difficulty_hard, scheduled_for);
   return db.prepare(`SELECT * FROM tests WHERE id = ?`).get(info.lastInsertRowid);
 }
 

@@ -36,6 +36,7 @@ export default function Tests() {
     class_id: "",
     title: "",
     topic: "",
+    subject: "",
     type: "topic",
     question_count: 20,
     duration_minutes: 25,
@@ -69,7 +70,11 @@ export default function Tests() {
   const create = async (e) => {
     e.preventDefault();
     try {
-      const test = await api("/tests", { method: "POST", body: { ...form, class_id: Number(form.class_id) } });
+      const topicInfo = topics.find((t) => t.title === form.topic);
+      const test = await api("/tests", {
+        method: "POST",
+        body: { ...form, class_id: Number(form.class_id), subject: topicInfo?.subject || form.subject || "" },
+      });
       setTests((p) => [test, ...p]);
       setShowCreate(false);
       setViewTest(test);
@@ -194,7 +199,17 @@ export default function Tests() {
             {form.class_id ? (
               <Select value={form.topic} onChange={set("topic")}>
                 <option value="">Mavzu tanlang</option>
-                {topics.map((t) => <option key={t.id} value={t.title}>{t.title}</option>)}
+                {Object.entries(
+                  topics.reduce((acc, t) => {
+                    const s = t.subject || "Tarix";
+                    (acc[s] = acc[s] || []).push(t);
+                    return acc;
+                  }, {})
+                ).map(([subj, list]) => (
+                  <optgroup key={subj} label={subj}>
+                    {list.map((t) => <option key={t.id} value={t.title}>{t.title}</option>)}
+                  </optgroup>
+                ))}
               </Select>
             ) : (
               <Input value={form.topic} onChange={set("topic")} placeholder="Avval sinf tanlang" disabled />

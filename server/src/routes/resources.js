@@ -107,32 +107,32 @@ router.delete("/schedule/:id", (req, res) => {
 
 // ---------- TOPICS ----------
 router.get("/topics", (req, res) => {
-  const { class_id } = req.query;
+  const { class_id, subject } = req.query;
   const sql = class_id
-    ? `SELECT * FROM topics WHERE teacher_id = ? AND class_id = ? ORDER BY order_no`
-    : `SELECT t.*, c.name AS class_name FROM topics t JOIN classes c ON c.id = t.class_id WHERE t.teacher_id = ? ORDER BY t.order_no`;
-  const params = class_id ? [req.user.id, class_id] : [req.user.id];
+    ? `SELECT * FROM topics WHERE teacher_id = ? AND class_id = ?${subject ? ` AND subject = ?` : ""} ORDER BY subject, order_no`
+    : `SELECT t.*, c.name AS class_name FROM topics t JOIN classes c ON c.id = t.class_id WHERE t.teacher_id = ?${subject ? ` AND t.subject = ?` : ""} ORDER BY t.subject, t.order_no`;
+  const params = class_id ? [req.user.id, class_id, ...(subject ? [subject] : [])] : [req.user.id, ...(subject ? [subject] : [])];
   res.json(db.prepare(sql).all(...params));
 });
 
 router.post("/topics", (req, res) => {
-  const { class_id, title, description = "", order_no = 0 } = req.body;
+  const { class_id, title, description = "", subject = "", order_no = 0 } = req.body;
   if (!class_id || !title) return res.status(400).json({ error: "Sinf va mavzu talab qilinadi" });
   const cls = db.prepare(`SELECT * FROM classes WHERE id = ? AND teacher_id = ?`).get(class_id, req.user.id);
   if (!cls) return res.status(404).json({ error: "Sinf topilmadi" });
   const info = db
-    .prepare(`INSERT INTO topics (teacher_id, class_id, title, description, order_no, status) VALUES (?, ?, ?, ?, ?, 'pending')`)
-    .run(req.user.id, class_id, title, description, order_no);
+    .prepare(`INSERT INTO topics (teacher_id, class_id, title, description, subject, order_no, status) VALUES (?, ?, ?, ?, ?, ?, 'pending')`)
+    .run(req.user.id, class_id, title, description, subject, order_no);
   res.json(db.prepare(`SELECT * FROM topics WHERE id = ?`).get(info.lastInsertRowid));
 });
 
 router.post("/topics/bulk", (req, res) => {
-  const { class_id, titles } = req.body;
+  const { class_id, titles, subject = "" } = req.body;
   if (!class_id || !Array.isArray(titles)) return res.status(400).json({ error: "class_id va titles talab qilinadi" });
   const cls = db.prepare(`SELECT * FROM classes WHERE id = ? AND teacher_id = ?`).get(class_id, req.user.id);
   if (!cls) return res.status(404).json({ error: "Sinf topilmadi" });
-  const insert = db.prepare(`INSERT INTO topics (teacher_id, class_id, title, order_no, status) VALUES (?, ?, ?, ?, 'pending')`);
-  const tx = db.transaction((ts) => ts.forEach((t, i) => insert.run(req.user.id, class_id, t, i)));
+  const insert = db.prepare(`INSERT INTO topics (teacher_id, class_id, title, subject, order_no, status) VALUES (?, ?, ?, ?, ?, 'pending')`);
+  const tx = db.transaction((ts) => ts.forEach((t, i) => insert.run(req.user.id, class_id, t, subject, i)));
   tx(titles);
   res.json({ ok: true, count: titles.length });
 });
@@ -140,9 +140,9 @@ router.post("/topics/bulk", (req, res) => {
 router.put("/topics/:id", (req, res) => {
   const t = db.prepare(`SELECT * FROM topics WHERE id = ? AND teacher_id = ?`).get(req.params.id, req.user.id);
   if (!t) return res.status(404).json({ error: "Mavzu topilmadi" });
-  const { title, description, order_no, status } = req.body;
-  db.prepare(`UPDATE topics SET title = COALESCE(?, title), description = COALESCE(?, description), order_no = COALESCE(?, order_no), status = COALESCE(?, status) WHERE id = ?`).run(
-    title ?? null, description ?? null, order_no ?? null, status ?? null, req.params.id
+  const { title, description, subject, order_no, status } = req.body;
+  db.prepare(`UPDATE topics SET title = COALESCE(?, title), description = COALESCE(?, description), subject = COALESCE(?, subject), order_no = COALESCE(?, order_no), status = COALESCE(?, status) WHERE id = ?`).run(
+    title ?? null, description ?? null, subject ?? null, order_no ?? null, status ?? null, req.params.id
   );
   res.json(db.prepare(`SELECT * FROM topics WHERE id = ?`).get(req.params.id));
 });

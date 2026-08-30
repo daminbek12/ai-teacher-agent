@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import bcrypt from "bcryptjs";
 import db from "./src/db/index.js";
 import { seedDefaultHolidays } from "./src/services/planner.js";
-import { importStructuredJson, syncLessonsToTopics } from "./src/services/textbook.js";
+import { importStructuredJson, syncLessonsToTopics, cleanTopicTitle } from "./src/services/textbook.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -48,7 +48,7 @@ if (fs.existsSync(manifestPath)) {
     if (!fs.existsSync(file)) continue;
     try {
       const data = JSON.parse(fs.readFileSync(file, "utf8"));
-      const res = importStructuredJson(teacher.id, { title: entry.title, grade: entry.grade, edition_year: entry.edition_year, data });
+      const res = importStructuredJson(teacher.id, { title: entry.title, grade: entry.grade, edition_year: entry.edition_year, data, subject: entry.subject });
       if (res.skipped) {
         console.log(`- ${entry.title}: ${res.reason}`);
       } else {
@@ -60,17 +60,34 @@ if (fs.existsSync(manifestPath)) {
   }
 }
 
-// 5. Backfill: allaqachon import qilingan darsliklarning mavzularini topics jadvaliga sinxronlash
-const textbookRows = db.prepare(`SELECT id, grade, title FROM textbooks WHERE teacher_id = ?`).all(teacher.id);
+// 5. Migration: subject bo'sh qolgan eski mavzularni darslik subject'iga moslab to'ldiramiz
+// (backfill'dan oldin ishlaydi — shunda backfill dedup keyi subject|title mos kelib, dublikat qo'shmaydi)
+const textbookRows = db.prepare(`SELECT id, grade, title, subject FROM textbooks WHERE teacher_id = ?`).all(teacher.id);
+let subjectFixed = 0;
+for (const tb of textbookRows) {
+  const subject = tb.subject || "Tarix";
+  const lessons = db.prepare(`SELECT title FROM lessons WHERE textbook_id = ? AND teacher_id = ?`).all(tb.id, teacher.id);
+  const classRow = db.prepare(`SELECT id FROM classes WHERE teacher_id = ? AND name = ?`).get(teacher.id, `${tb.grade}-sinf`);
+  if (!classRow) continue;
+  const titles = lessons.map((l) => cleanTopicTitle(l.title)).filter(Boolean);
+  const update = db.prepare(`UPDATE topics SET subject = ? WHERE teacher_id = ? AND class_id = ? AND (subject = '' OR subject IS NULL) AND title = ?`);
+  const tx = db.transaction((ts) => ts.forEach((title) => { subjectFixed += update.run(subject, teacher.id, classRow.id, title).changes; }));
+  tx([...new Set(titles)]);
+}
+if (subjectFixed) console.log(`topics subject migration: ${subjectFixed} ta mavzuning fani to'ldirildi`);
+
+// 6. Backfill: allaqachon import qilingan darsliklarning mavzularini topics jadvaliga sinxronlash
+// subject'ga qarab alohida sinxronlaymiz (O'zbekiston tarixi va Jahon tarixi bir-biriga aralashmasligi uchun)
 const backfill = new Map();
 for (const tb of textbookRows) {
   const lessons = db.prepare(`SELECT lesson_no, title FROM lessons WHERE textbook_id = ? AND teacher_id = ? ORDER BY lesson_no`).all(tb.id, teacher.id);
-  if (!backfill.has(tb.grade)) backfill.set(tb.grade, []);
-  backfill.get(tb.grade).push(...lessons);
+  const key = `${tb.grade}|${tb.subject || "Tarix"}`;
+  if (!backfill.has(key)) backfill.set(key, { grade: tb.grade, subject: tb.subject || "Tarix", lessons: [] });
+  backfill.get(key).lessons.push(...lessons);
 }
 let backfilled = 0;
-for (const [grade, lessons] of backfill) {
-  backfilled += syncLessonsToTopics(teacher.id, grade, lessons);
+for (const [, { grade, subject, lessons }] of backfill) {
+  backfilled += syncLessonsToTopics(teacher.id, grade, lessons, subject);
 }
 if (backfilled) console.log(`topics backfill: ${backfilled} ta mavzu qo'shildi`);
 
