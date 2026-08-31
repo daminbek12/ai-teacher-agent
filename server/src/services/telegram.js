@@ -2,8 +2,8 @@ import TelegramBot from "node-telegram-bot-api";
 import bcrypt from "bcryptjs";
 import db from "../db/index.js";
 import { generateTestPdf, generateReportPdf } from "./pdfGenerator.js";
-import { generateTestDocx, generateReportDocx, generatePlanDocx } from "./docxGenerator.js";
-import { ocrImage, extractPdfText, extractDocxText, classifyImage, parseTimetable } from "./ocr.js";
+import { generateTestDocx, generateReportDocx, generatePlanDocx, generateTextDocx } from "./docxGenerator.js";
+import { ocrImage, extractPdfText, extractDocxText } from "./ocr.js";
 import { createTextbook, addTextbookVersion, structureTextbook, indexTextbookContent, chunkText, listTextbooks, getTextbookIndex } from "./textbook.js";
 import { extractZip, isValidUpload, guessMime } from "./files.js";
 import { createFullTest, generateTestQuestions, createVariants, analyzeStudentWeaknesses, adaptiveDifficulty } from "./testGenerator.js";
@@ -56,6 +56,14 @@ export function sendMessage(chatId, text, { parse_mode = null, reply_markup = nu
 
 function inlineKeyboard(rows) {
   return { inline_keyboard: rows.map((row) => row.map(([label, data]) => ({ text: label, callback_data: data }))) };
+}
+
+function replyKeyboard(rows) {
+  return {
+    keyboard: rows.map((row) => row.map((label) => ({ text: label }))),
+    resize_keyboard: true,
+    one_time_keyboard: false,
+  };
 }
 
 async function sendLong(chatId, text, extra = {}) {
@@ -164,29 +172,35 @@ function handleSwitchAccount(chatId) {
 }
 
 // ================= ASOSIY MENYU =================
+const MENU_BUTTONS = [
+  ["Bosh sahifa"],
+  ["Sinflar", "Jadval"],
+  ["Mavzular", "Darsliklar"],
+  ["Testlar", "Sifat nazorati"],
+  ["Natijalar", "Yillik rejalar"],
+  ["Hisobotlar", "Materiallar"],
+  ["Audit log", "Sozlamalar"],
+];
+
+const REPLY_BUTTONS = {
+  "bosh sahifa": "bosh_sahifa",
+  "sinflar": "sinflar",
+  "jadval": "jadval",
+  "mavzular": "mavzular",
+  "darsliklar": "darsliklar",
+  "testlar": "testlar",
+  "sifat nazorati": "sifat_nazorati",
+  "natijalar": "natijalar",
+  "yillik rejalar": "yillik_reja",
+  "hisobotlar": "hisobot",
+  "materiallar": "material",
+  "audit log": "audit",
+  "sozlamalar": "sozlamalar",
+};
+
 function sendMainMenu(chatId, teacher) {
-  const menu = [
-    ["Bugungi dars (briefing)", "menu:briefing"],
-    ["Jadval", "menu:jadval"],
-    ["Mavzular", "menu:mavzular"],
-    ["Darsliklar", "menu:darsliklar"],
-    ["Testlar", "menu:testlar"],
-    ["Natijalar", "menu:natijalar"],
-    ["Hisobot", "menu:hisobot"],
-    ["Dars rejasi", "menu:dars_rejasi"],
-    ["Uy vazifasi", "menu:uy_vazifasi"],
-    ["Yillik reja", "menu:yillik_reja"],
-    ["O'quvchilar", "menu:oquvchilar"],
-    ["Material", "menu:material"],
-    ["Sozlamalar", "menu:sozlamalar"],
-    ["AI xarajat", "menu:ai_usage"],
-    ["Audit", "menu:audit"],
-    ["Eslatmalar", "menu:eslatmalar"],
-    ["Yordam", "help"],
-    ["Akkaunt almashtirish", "switch_account"],
-  ];
-  return sendMessage(chatId, `Salom, ${teacher.name}!\n\nAI Teacher Agent: rasm, PDF yoki ZIP yuboring — qolganini tizim avtomatik qiladi.\n\nBo'lim tanlang:`, {
-    reply_markup: inlineKeyboard(menu),
+  return sendMessage(chatId, `Salom, ${teacher.name}!\n\nBo'lim tanlang yoki rasm yuboring — rasm matni avtomatik Word (docx) faylga aylantiriladi.\n\nSinflar — sinflar ro'yxati\nJadval — darslar jadvali\nMavzular — darslik mavzulari\nDarsliklar — saqlangan darsliklar\nTestlar — test yaratish/korish\nSifat nazorati — test sifatini tekshirish\nNatijalar — o'quvchilar natijalari\nYillik rejalar — yillik dars rejasi\nHisobotlar — PDF/DOCX hisobot\nMateriallar — materiallar ombori\nAudit log — amallar tarixi\nSozlamalar — bot sozlamalari`, {
+    reply_markup: replyKeyboard(MENU_BUTTONS),
   });
 }
 
@@ -229,37 +243,31 @@ async function sendTestWithMenu(chatId, testId) {
   });
 }
 
-// ================= RASM (OCR) =================
+// ================= RASM (OCR → Word) =================
 async function handleImage(chatId, teacher, buffer) {
-  await sendMessage(chatId, "Rasm tahlil qilinmoqda (OCR)...");
+  await sendMessage(chatId, "Rasm o'qilmoqda (OCR)...");
   const { text, confidence } = await ocrImage(buffer);
-  const kind = classifyImage(text);
-
-  if (kind === "timetable") {
-    const parsed = await parseTimetable(teacher.id, text, {});
-    setState(chatId, "pending_timetable", parsed.entries);
-    const lines = ["JADVAL ANIQLANDI\n"];
-    const grouped = {};
-    for (const e of parsed.entries) {
-      if (!grouped[e.day_of_week]) grouped[e.day_of_week] = [];
-      grouped[e.day_of_week].push(`${e.start_time} — ${e.class_name || "?"} — ${e.subject || "Dars"}`);
-    }
-    for (let d = 1; d <= 7; d++) if (grouped[d]) lines.push(`${DAY_NAMES[d]}:\n${grouped[d].join("\n")}\n`);
-    lines.push(`Ishonch: ${confidence}%`);
-    return bot.sendMessage(chatId, lines.join("\n"), {
-      reply_markup: inlineKeyboard([
-        ["Tasdiqlash", "confirm_timetable:ok"],
-        ["Qayta o'qish", "confirm_timetable:redo"],
-      ]),
+  if (!text || !text.trim()) {
+    return sendMessage(chatId, "Rasmdan matn aniqlanmadi. Aniqroq rasm yuboring.", {
+      reply_markup: replyKeyboard(MENU_BUTTONS),
     });
   }
 
-  setState(chatId, "pending_textbook_text", text);
-  return bot.sendMessage(chatId, `Rasm o'qildi (${confidence}% ishonch).\nBu sahifa darslik sahifasi sifatida qabul qilinsinmi?`, {
-    reply_markup: inlineKeyboard([
-      ["Darslikka qo'shish", "textbook_confirm:ok"],
-      ["Bekor", "textbook_confirm:cancel"],
-    ]),
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const filename = `matn-${stamp}`;
+
+  try {
+    const docxBuffer = await generateTextDocx(text, { title: `Matn (OCR ${confidence}%)` });
+    await bot.sendDocument(chatId, Buffer.from(text, "utf-8"), { filename: `${filename}.txt` });
+    await bot.sendDocument(chatId, docxBuffer, { filename: `${filename}.docx` });
+  } catch (e) {
+    logError("photoToDocx", e, teacher.id);
+    return sendMessage(chatId, `Word fayl yaratishda xato: ${e.message}`);
+  }
+
+  logAudit(teacher.id, { action: "photo.ocr", entityType: "photo", entityId: 0, detail: { chars: text.length, confidence } });
+  return sendMessage(chatId, `Matn olindi (${confidence}% ishonch, ${text.length} belgi).\n\nTXT va Word (docx) fayllar yuborildi.`, {
+    reply_markup: replyKeyboard(MENU_BUTTONS),
   });
 }
 
@@ -408,7 +416,8 @@ function startAutoSetup(chatId, teacher) {
   const now = new Date().getFullYear();
   seedDefaultHolidays(teacher.id, now);
   return sendMessage(chatId,
-    `AVTOMATIK SOZLASH BOSHLANDI\n\nQadamlar:\n1. Jadval rasmini yuboring\n2. Darslik PDF/ZIP/rasmini yuboring\n\nJadval rasmini yuborishdan boshlang`
+    `AVTOMATIK SOZLASH BOSHLANDI\n\n1. PDF yoki ZIP darslikni yuboring\n2. Sinflar va jadvalni web panelda yoki "Jadval" bo'limida sozlang\n\nRasm yuborsangiz — matn Word faylga aylantiriladi.`,
+    { reply_markup: replyKeyboard(MENU_BUTTONS) }
   );
 }
 
@@ -496,9 +505,24 @@ function handleMenu(chatId, teacher, key) {
       for (const [cls, list] of Object.entries(grouped)) text += `\n${cls} (${list.length}):\n${list.join("\n")}\n`;
       return sendLong(chatId, text);
     }
+    case "sinflar": {
+      const classes = getTeacherClasses(teacherId);
+      if (!classes.length) return sendMessage(chatId, "Sinflar yo'q. Jadval rasmini yuboring yoki sinf qo'shing.");
+      const text = "Sinflar:\n" + classes.map((c) => `• ${c.name} (${c.subject || "Tarix"}) — ${c.student_count || 0} o'quvchi`).join("\n");
+      return sendMessage(chatId, text);
+    }
+    case "sifat_nazorati": {
+      const tests = db.prepare(`SELECT t.*, c.name AS class_name FROM tests t JOIN classes c ON c.id = t.class_id WHERE t.teacher_id = ? ORDER BY t.id DESC LIMIT 10`).all(teacherId);
+      if (!tests.length) return bot.sendMessage(chatId, "Testlar yo'q. Avval test yarating.", { reply_markup: replyKeyboard(MENU_BUTTONS) });
+      return bot.sendMessage(chatId, "Sifat nazorati uchun test tanlang:", {
+        reply_markup: inlineKeyboard(
+          tests.map((t) => [[`${t.title} (${t.question_count})`, `qc:${t.id}`]]).concat([[["Menu", "menu:back"]]])
+        ),
+      });
+    }
     case "testlar": {
       const tests = db.prepare(`SELECT t.*, c.name AS class_name FROM tests t JOIN classes c ON c.id = t.class_id WHERE t.teacher_id = ? ORDER BY t.id DESC LIMIT 10`).all(teacherId);
-      const extra = [["+ Yangi test", "create_test"], ["Kunlik testlar", "daily_test"], ["Menu", "menu:back"]];
+      const extra = [["+ Yangi test", "create_test"], ["Sifat nazorati", "menu:sifat_nazorati"], ["Menu", "menu:back"]];
       if (!tests.length) return bot.sendMessage(chatId, "Hozircha testlar yo'q.", { reply_markup: inlineKeyboard([extra]) });
       return bot.sendMessage(chatId, "Testlar (oxirgi 10):", {
         reply_markup: inlineKeyboard(
@@ -809,7 +833,7 @@ onCallback("auto_setup:view", async (ctx) => {
 
 // ---- Help ----
 onCallback("help", async (ctx) => {
-  return sendMessage(ctx.chatId, "Komandalar:\n/menu — asosiy menyu\n\nOddiy til bilan yozing:\n\"7-A uchun 10 ta test tuz\"\n\"7-A uchun dars rejasi tuz\"\n\"eng ko'p xato qilingan mavzuni top\"\n\nFayl yuboring:\n• jadval rasmi — jadval tuziladi\n• PDF/rasm/ZIP — darslik saqlanadi");
+  return sendMessage(ctx.chatId, "Bo'limlar: /menu\n\nQuyidagi tugmalardan foydalaning:\n• Sinflar, Jadval, Mavzular\n• Darsliklar, Testlar, Sifat nazorati\n• Natijalar, Yillik rejalar, Hisobotlar\n• Materiallar, Audit log, Sozlamalar\n\nRasm yuboring — matn avtomatik TXT va Word (docx) faylga aylantiriladi.\nPDF/ZIP yuboring — darslik sifatida saqlanadi.\n\nOddiy til bilan ham yozishingiz mumkin:\n\"7-A uchun 10 ta test tuz\"");
 });
 
 // ---- Menu ----
@@ -1367,6 +1391,13 @@ async function handleMessage(msg) {
       }
       return sendMessage(chatId, "Uchta son yozing, masalan: 30 50 20");
     }
+  }
+
+  // ---- Reply keyboard tugmalari ----
+  const buttonAction = REPLY_BUTTONS[text.trim().toLowerCase()];
+  if (buttonAction) {
+    if (buttonAction === "bosh_sahifa") return sendMainMenu(chatId, teacher);
+    return handleMenu(chatId, teacher, buttonAction);
   }
 
   // ---- Tabiiy til ----

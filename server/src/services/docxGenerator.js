@@ -171,6 +171,32 @@ export function generateReportDocx({ title = "HISOBOT", sections = [] }) {
   return new Document({ sections: [{ properties: {}, children }] });
 }
 
+export async function generateTextDocx(text, { title = "MATN" } = {}) {
+  const children = [];
+  children.push(
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      heading: HeadingLevel.HEADING_1,
+      children: [new TextRun({ text: title, bold: true, size: 32 })],
+    })
+  );
+  const lines = String(text).split(/\r?\n/);
+  for (const line of lines) {
+    if (!line.trim()) {
+      children.push(new Paragraph({ text: "" }));
+      continue;
+    }
+    children.push(
+      new Paragraph({
+        spacing: { after: 100 },
+        children: [new TextRun({ text: line, size: 22 })],
+      })
+    );
+  }
+  const doc = new Document({ sections: [{ properties: {}, children }] });
+  return Packer.toBuffer(doc);
+}
+
 export function generatePlanDocx({ title = "DARS REJASI", fields = [] }) {
   const children = [];
   children.push(
