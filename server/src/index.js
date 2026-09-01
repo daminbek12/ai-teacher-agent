@@ -4,6 +4,7 @@ import cors from "cors";
 import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import db from "./db/index.js";
 import authRoutes from "./routes/auth.js";
 import resourceRoutes from "./routes/resources.js";
@@ -15,6 +16,7 @@ import { scheduleAll } from "./services/scheduler.js";
 import { telegramEnabled } from "./services/telegram.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const require2 = createRequire(import.meta.url);
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -24,8 +26,7 @@ app.use(express.json({ limit: "80mb" }));
 app.get("/api/health", (req, res) => {
   let tesseract = false;
   try {
-    const { execFileSync } = require("node:child_process");
-    execFileSync("tesseract", ["--version"], { timeout: 5000, stdio: "pipe" });
+    require2.resolve("tesseract.js");
     tesseract = true;
   } catch {}
   res.json({ ok: true, aiEnabled: Boolean(process.env.USER_LLM_API_KEY), telegramEnabled: Boolean(process.env.TELEGRAM_BOT_TOKEN), tesseract, db: process.env.DATA_DIR ? path.join(process.env.DATA_DIR, "teacher_agent.db") : path.join(__dirname, "..", "..", "data", "teacher_agent.db") });

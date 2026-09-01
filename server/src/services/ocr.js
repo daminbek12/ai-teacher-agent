@@ -14,11 +14,42 @@ const { PDFParse } = require("pdf-parse");
 const execFileAsync = promisify(execFile);
 const TESSDATA_LANG = process.env.TESSERACT_LANG || "eng";
 
+// Tesseract.js singleton worker — Render'da sistemadagi tesseract kerak emas
+let tessWorker = null;
+let tessLang = null;
+
+async function getTessWorker(lang = TESSDATA_LANG) {
+  if (tessWorker && tessLang === lang) return tessWorker;
+  try {
+    if (tessWorker) await tessWorker.terminate().catch(() => {});
+    const { createWorker } = await import("tesseract.js");
+    const worker = await createWorker(lang);
+    tessWorker = worker;
+    tessLang = lang;
+    return worker;
+  } catch (e) {
+    tessWorker = null;
+    throw e;
+  }
+}
+
 function tmpPath(ext) {
   return path.join(os.tmpdir(), `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`);
 }
 
 export async function ocrImage(buffer, { psm = "6" } = {}) {
+  // 1) Tesseract.js orqali (sistemaga bog'liq emas, Render'da ishlaydi)
+  try {
+    const worker = await getTessWorker();
+    const { data } = await worker.recognize(Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer), {
+      psm: Number(psm),
+    });
+    return { text: (data.text || "").trim(), confidence: Math.round(data.confidence || 0) };
+  } catch (e) {
+    console.error("[ocr] tesseract.js xato, sistemadagi tesseractga o'tilmoqda:", e.message);
+  }
+
+  // 2) Fallback: sistemadagi tesseract binary (lokal ishlab chiqish uchun)
   const tmp = tmpPath(".png");
   fs.writeFileSync(tmp, buffer);
   try {
