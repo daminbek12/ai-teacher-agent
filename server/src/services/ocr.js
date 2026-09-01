@@ -3,6 +3,7 @@ import { promisify } from "node:util";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import AdmZip from "adm-zip";
 import { generateJson, aiEnabled } from "./ai.js";
@@ -18,12 +19,20 @@ const TESSDATA_LANG = process.env.TESSERACT_LANG || "eng";
 let tessWorker = null;
 let tessLang = null;
 
+// Lokal traineddata fayli (repo ichida) — Render'da CDN dan yuklab olmaslik uchun
+const LOCAL_TRAINEDDATA = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", `${TESSDATA_LANG}.traineddata`);
+
 async function getTessWorker(lang = TESSDATA_LANG) {
   if (tessWorker && tessLang === lang) return tessWorker;
   try {
     if (tessWorker) await tessWorker.terminate().catch(() => {});
     const { createWorker } = await import("tesseract.js");
-    const worker = await createWorker(lang);
+    const workerOpts = {};
+    if (fs.existsSync(LOCAL_TRAINEDDATA)) {
+      workerOpts.langPath = path.dirname(LOCAL_TRAINEDDATA);
+      console.log(`[ocr] Lokal traineddata ishlatiladi: ${LOCAL_TRAINEDDATA}`);
+    }
+    const worker = await createWorker(lang, 1, workerOpts);
     tessWorker = worker;
     tessLang = lang;
     return worker;
