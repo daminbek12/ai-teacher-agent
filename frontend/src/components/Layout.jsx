@@ -108,6 +108,7 @@ function SidebarFooter({ user, logout }) {
         </div>
       </div>
       <button
+        type="button"
         onClick={logout}
         className="flex min-h-[40px] w-full items-center gap-2 rounded-lg px-3 text-sm font-medium text-slate-300 transition-colors hover:bg-rose-500/10 hover:text-rose-300"
       >
@@ -165,6 +166,7 @@ export default function Layout() {
             <div className="flex items-center justify-between border-b border-slate-800 pr-2">
               <SidebarHeader />
               <button
+                type="button"
                 onClick={() => setDrawerOpen(false)}
                 aria-label="Menyuni yopish"
                 className="mr-2 flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
@@ -183,6 +185,7 @@ export default function Layout() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 flex min-h-[56px] items-center justify-between gap-3 border-b border-stone-200 bg-white/90 px-4 backdrop-blur-md lg:hidden">
           <button
+            type="button"
             onClick={() => setDrawerOpen(true)}
             aria-label="Menyuni ochish"
             aria-expanded={drawerOpen}
@@ -197,6 +200,7 @@ export default function Layout() {
             <span className="font-display text-sm font-bold text-slate-900">AI Teacher Agent</span>
           </div>
           <button
+            type="button"
             onClick={logout}
             aria-label="Chiqish"
             className="flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-rose-50 hover:text-rose-600"

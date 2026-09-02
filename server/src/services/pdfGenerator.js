@@ -1,7 +1,7 @@
 import PDFDocument from "pdfkit";
 
 function writeTestPdf(doc, data) {
-  const { schoolName = "", subject = "Tarix", className = "", topic = "", teacherName = "", date = "", title = "TEST", questions = [], showAnswers = false } = data;
+  const { schoolName = "", subject = "Tarix", className = "", topic = "", teacherName = "", date = "", title = "TEST", questions = [], showAnswers = false, beletNumber = "", isHomework = false } = data;
 
   if (schoolName) {
     doc.font("Helvetica-Bold").fontSize(16).text(schoolName, { align: "center" });
@@ -13,6 +13,13 @@ function writeTestPdf(doc, data) {
   doc.text(`Mavzu: ${topic}`);
   doc.text(`O'qituvchi: ${teacherName || "__________"}`);
   doc.text(`Sana: ${date || "__________"}`);
+  if (isHomework) {
+    doc.text(`Uyga vazifa: HA`);
+  }
+  if (beletNumber) {
+    doc.font("Helvetica-Bold").fontSize(12).text(`Belet raqami: № ${beletNumber}`, { align: "right" });
+    doc.font("Helvetica").fontSize(11);
+  }
   doc.moveDown();
   doc.font("Helvetica-Bold").fontSize(16).text(title, { align: "center" });
   doc.moveDown();

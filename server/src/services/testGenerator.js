@@ -271,14 +271,22 @@ export async function generateTestQuestions(teacherId, { topic, subject = "Tarix
 }
 
 export function createTestRecord(teacherId, data) {
-  const { class_id, title, type = "topic", topic = "", subject = "", question_count = 20, duration_minutes = 25, difficulty_easy = 30, difficulty_medium = 50, difficulty_hard = 20, scheduled_for = null } = data;
+  const { class_id, title, type = "topic", topic = "", subject = "", question_count = 20, duration_minutes = 25, difficulty_easy = 30, difficulty_medium = 50, difficulty_hard = 20, scheduled_for = null, is_homework = 0, belet_number = "" } = data;
   const info = db
     .prepare(
-      `INSERT INTO tests (teacher_id, class_id, title, type, topic, subject, question_count, duration_minutes, difficulty_easy, difficulty_medium, difficulty_hard, scheduled_for)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO tests (teacher_id, class_id, title, type, topic, subject, question_count, duration_minutes, difficulty_easy, difficulty_medium, difficulty_hard, scheduled_for, is_homework, belet_number)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
-    .run(teacherId, class_id, title, type, topic, subject, question_count, duration_minutes, difficulty_easy, difficulty_medium, difficulty_hard, scheduled_for);
+    .run(teacherId, class_id, title, type, topic, subject, question_count, duration_minutes, difficulty_easy, difficulty_medium, difficulty_hard, scheduled_for, is_homework ? 1 : 0, belet_number);
   return db.prepare(`SELECT * FROM tests WHERE id = ?`).get(info.lastInsertRowid);
+}
+
+export function nextBeletNumber(teacherId, classId) {
+  const row = db
+    .prepare(`SELECT belet_number FROM tests WHERE teacher_id = ? AND class_id = ? AND belet_number != '' ORDER BY CAST(belet_number AS INTEGER) DESC LIMIT 1`)
+    .get(teacherId, classId);
+  const next = row && row.belet_number ? Number(row.belet_number) + 1 : 1;
+  return String(next).padStart(3, "0");
 }
 
 export function saveQuestions(teacherId, testId, questions) {

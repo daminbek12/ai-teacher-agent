@@ -1,7 +1,8 @@
 import cron from "node-cron";
 import db from "../db/index.js";
 import { generateLessonPlan, generateHomework } from "./lessonService.js";
-import { createFullTest, createTestRecord, saveQuestions, generateTestQuestions } from "./testGenerator.js";
+import { createFullTest, createTestRecord, saveQuestions, generateTestQuestions, nextBeletNumber } from "./testGenerator.js";
+import { hostTestPdf } from "./pdfHost.js";
 
 const dayNames = ["", "Dushanba", "Seshanba", "Chorshanba", "Payshanba", "Juma", "Shanba", "Yakshanba"];
 
@@ -194,22 +195,40 @@ export async function prepareDailyTest(teacherId) {
       .get(cls.id, subject);
     if (!topicInfo) continue;
 
+    const beletNumber = nextBeletNumber(teacherId, cls.id);
+
     try {
       const test = await createFullTest(teacherId, {
         class_id: cls.id,
-        title: `Kunlik test: ${cls.name} - ${topicInfo.title} (${today})`,
+        title: `Uyga vazifa: ${cls.name} - ${topicInfo.title} (${today})`,
         type: "daily",
         topic: topicInfo.title,
         question_count: count,
         subject,
         local_only: true,
         skip_qc: true,
+        is_homework: 1,
+        belet_number: beletNumber,
       });
-      created.push(test);
+      let pdfLine = "";
+      try {
+        const hosted = await hostTestPdf(teacherId, test.id);
+        if (hosted?.url) pdfLine = `\nPDF: ${hosted.url}`;
+      } catch {}
+      db.prepare(
+        `INSERT INTO homework (teacher_id, class_id, topic, content, due_date, status)
+         VALUES (?, ?, ?, ?, date('now', '+1 day'), 'active')`
+      ).run(
+        teacherId,
+        cls.id,
+        topicInfo ? topicInfo.title : "",
+        `Uyga vazifa test: "${test.title}"\nBelet raqami: № ${beletNumber}\nSavollar: ${test.question_count} ta\n${test.topic ? "Mavzu: " + test.topic : ""}${pdfLine}`
+      );
+      created.push({ ...test, pdf_url: pdfLine.replace("\nPDF: ", "") || test.pdf_url || "" });
       db.prepare(
         `INSERT INTO reminders (teacher_id, message, scheduled_at, status)
          VALUES (?, ?, datetime('now', 'localtime'), 'pending')`
-      ).run(teacherId, `Kunlik test tayyor: "${test.title}" (${test.question_count} savol). Test ID: ${test.id}`);
+      ).run(teacherId, `Uyga vazifa testi tayyor: "${test.title}" (belet № ${beletNumber}, ${test.question_count} savol). Test ID: ${test.id}`);
     } catch (e) {
       db.prepare(
         `INSERT INTO reminders (teacher_id, message, scheduled_at, status)

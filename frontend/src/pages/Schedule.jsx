@@ -84,6 +84,7 @@ export default function Schedule() {
                       <div className="flex items-center justify-between gap-2">
                         <Badge color="primary">{l.start_time}</Badge>
                         <button
+                          type="button"
                           onClick={() => remove(l.id)}
                           aria-label={`${day.name} ${l.start_time} ${l.subject || "dars"} yozuvini o'chirish`}
                           className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 opacity-100 transition-colors hover:bg-danger-50 hover:text-danger-600 md:opacity-0 md:group-hover:opacity-100"

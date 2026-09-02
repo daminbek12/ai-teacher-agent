@@ -14,6 +14,7 @@ import {
 import { generateTestDocx } from "../services/docxGenerator.js";
 import { generateTestPdf } from "../services/pdfGenerator.js";
 import { sendTest } from "../services/telegram.js";
+import { hostTestPdf } from "../services/pdfHost.js";
 
 const router = express.Router();
 router.use(authRequired);
@@ -84,10 +85,14 @@ router.post("/daily", async (req, res) => {
     if (!created || created.length === 0) {
       return res.json({ tests: [], message: "Bugun uchun kunlik test yaratilmadi (klass yoki mavzu yo'q, yoki allaqachon yaratilgan)" });
     }
-    const tests = created.map((t) => ({
-      ...t,
-      questions: enrichQuestions(db.prepare(`SELECT * FROM questions WHERE test_id = ? ORDER BY id`).all(t.id)),
-    }));
+    const tests = created.map((t) => {
+      const cls = db.prepare(`SELECT name FROM classes WHERE id = ?`).get(t.class_id);
+      return {
+        ...t,
+        class_name: cls?.name || "",
+        questions: enrichQuestions(db.prepare(`SELECT * FROM questions WHERE test_id = ? ORDER BY id`).all(t.id)),
+      };
+    });
     res.json({ tests });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -161,6 +166,8 @@ router.get("/:id/docx", async (req, res) => {
     title: test.title,
     questions,
     showAnswers: req.query.answers === "true",
+    beletNumber: test.belet_number || "",
+    isHomework: !!test.is_homework,
   });
   res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
   res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(test.title)}.docx"`);
@@ -181,10 +188,29 @@ router.get("/:id/pdf", async (req, res) => {
     title: test.title,
     questions,
     showAnswers: req.query.answers === "true",
+    beletNumber: test.belet_number || "",
+    isHomework: !!test.is_homework,
   });
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(test.title)}.pdf"`);
   res.send(buffer);
+});
+
+router.post("/:id/share-pdf", async (req, res) => {
+  try {
+    const result = await hostTestPdf(req.user.id, req.params.id, {
+      answers: req.body?.answers === true || req.query.answers === "true",
+      force: req.body?.force === true,
+    });
+    const proto = req.headers["x-forwarded-proto"] || req.protocol || "https";
+    const host = req.headers["x-forwarded-host"] || req.headers.host;
+    const origin = host ? `${proto}://${host}` : "";
+    const url = result.url?.startsWith("http") ? result.url : (origin ? `${origin}${result.url}` : result.url);
+    const localUrl = result.localUrl?.startsWith("http") ? result.localUrl : (origin && result.localUrl ? `${origin}${result.localUrl}` : result.localUrl);
+    res.json({ ...result, url, localUrl });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 router.post("/:id/send-telegram", async (req, res) => {

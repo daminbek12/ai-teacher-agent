@@ -12,6 +12,7 @@ import testRoutes from "./routes/tests.js";
 import featureRoutes from "./routes/features.js";
 import moduleRoutes from "./routes/modules.js";
 import adminRoutes from "./routes/admin.js";
+import shareRoutes from "./routes/share.js";
 import { scheduleAll } from "./services/scheduler.js";
 import { telegramEnabled } from "./services/telegram.js";
 
@@ -32,6 +33,7 @@ app.get("/api/health", (req, res) => {
   res.json({ ok: true, aiEnabled: Boolean(process.env.USER_LLM_API_KEY), telegramEnabled: Boolean(process.env.TELEGRAM_BOT_TOKEN), tesseract, db: process.env.DATA_DIR ? path.join(process.env.DATA_DIR, "teacher_agent.db") : path.join(__dirname, "..", "..", "data", "teacher_agent.db") });
 });
 
+app.use("/api", shareRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/tests", testRoutes);
 app.use("/api", featureRoutes);

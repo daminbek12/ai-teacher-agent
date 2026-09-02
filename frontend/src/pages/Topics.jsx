@@ -137,6 +137,7 @@ export default function Topics() {
                           ))}
                         </Select>
                         <button
+                          type="button"
                           onClick={() => remove(t.id)}
                           aria-label={`${t.title} mavzusini o'chirish`}
                           className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-danger-50 hover:text-danger-600"

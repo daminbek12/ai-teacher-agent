@@ -148,6 +148,7 @@ export default function Classes() {
                             </div>
                           </div>
                           <button
+                            type="button"
                             onClick={() => deleteStudent(s.id)}
                             className="flex min-h-[36px] items-center rounded-md px-2 text-xs font-medium text-slate-400 transition-colors hover:bg-danger-50 hover:text-danger-600"
                             aria-label={`${s.first_name} ${s.last_name} o'quvchisini o'chirish`}

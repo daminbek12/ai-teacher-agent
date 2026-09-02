@@ -220,11 +220,20 @@ export async function sendTest(chatId, testId, { includeAnswers = false } = {}) 
     title: test.title,
     questions: questions.map((q) => ({ ...q, options: JSON.parse(q.options_json) })),
     showAnswers: includeAnswers,
+    beletNumber: test.belet_number || "",
+    isHomework: !!test.is_homework,
   };
   const pdf = await generateTestPdf(data);
   const docx = await generateTestDocx(data);
+  let pdfUrl = test.pdf_url || "";
+  try {
+    const { hostTestPdf } = await import("./pdfHost.js");
+    const hosted = await hostTestPdf(test.teacher_id, test.id);
+    if (hosted?.url) pdfUrl = hosted.url;
+  } catch {}
   const suffix = includeAnswers ? " (javoblar bilan)" : "";
-  await bot.sendMessage(chatId, `Test: ${test.title}\nSavollar: ${questions.length}${suffix}`);
+  const extra = pdfUrl ? `\nPDF havola: ${pdfUrl}` : "";
+  await bot.sendMessage(chatId, `Test: ${test.title}\nSavollar: ${questions.length}${suffix}${extra}`);
   await bot.sendDocument(chatId, Buffer.from(pdf), { filename: `${test.title}.pdf` });
   await bot.sendDocument(chatId, docx, { filename: `${test.title}.docx` });
   return true;

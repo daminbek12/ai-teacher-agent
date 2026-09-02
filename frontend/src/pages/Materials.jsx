@@ -74,6 +74,7 @@ export default function Materials() {
                 <div className="mb-2 flex items-start justify-between gap-2">
                   <h3 className="font-semibold text-slate-800">{m.title}</h3>
                   <button
+                    type="button"
                     onClick={() => remove(m.id)}
                     aria-label={`${m.title} materialini o'chirish`}
                     className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-danger-50 hover:text-danger-600"

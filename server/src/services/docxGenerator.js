@@ -12,7 +12,7 @@ import {
   BorderStyle,
 } from "docx";
 
-function buildTestDoc({ schoolName = "", subject = "Tarix", className = "", topic = "", teacherName = "", date = "", title = "TEST", questions = [], showAnswers = false }) {
+function buildTestDoc({ schoolName = "", subject = "Tarix", className = "", topic = "", teacherName = "", date = "", title = "TEST", questions = [], showAnswers = false, beletNumber = "", isHomework = false }) {
   const children = [];
 
   if (schoolName) {
@@ -33,8 +33,17 @@ function buildTestDoc({ schoolName = "", subject = "Tarix", className = "", topi
     `O'qituvchi: ${teacherName || "__________"}`,
     `Sana: ${date || "__________"}`,
   ];
+  if (isHomework) meta.push("Uyga vazifa: HA");
   for (const m of meta) {
     children.push(new Paragraph({ children: [new TextRun({ text: m, size: 22 })] }));
+  }
+  if (beletNumber) {
+    children.push(
+      new Paragraph({
+        alignment: AlignmentType.RIGHT,
+        children: [new TextRun({ text: `Belet raqami: № ${beletNumber}`, bold: true, size: 22 })],
+      })
+    );
   }
 
   children.push(new Paragraph({ text: "", spacing: { after: 100 } }));

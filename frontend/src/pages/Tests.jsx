@@ -34,6 +34,7 @@ export default function Tests() {
   const [showCreate, setShowCreate] = useState(false);
   const [dailyBusy, setDailyBusy] = useState(false);
   const [viewTest, setViewTest] = useState(null);
+  const [shareBusy, setShareBusy] = useState(false);
   const [form, setForm] = useState({
     class_id: "",
     title: "",
@@ -122,9 +123,27 @@ export default function Tests() {
     try {
       const blob = await api(`/tests/${id}/${format}`, { download: true });
       const test = tests.find((t) => t.id === id) || viewTest;
-      downloadBlob(blob, `${test?.title || "test"}.${format.split("?")[0]}`);
+      const ext = String(format).startsWith("pdf") ? "pdf" : format.split("?")[0];
+      downloadBlob(blob, `${test?.title || "test"}.${ext}`);
     } catch (err) {
       toast.error("Yuklab olishda xatolik");
+    }
+  };
+
+  const sharePdf = async (id, answers = false) => {
+    setShareBusy(true);
+    try {
+      const res = await api(`/tests/${id}/share-pdf`, { method: "POST", body: { answers } });
+      const url = res.url;
+      if (!url) throw new Error("Havola olinmadi");
+      setTests((p) => p.map((t) => (t.id === id ? { ...t, pdf_url: answers ? t.pdf_url : url } : t)));
+      setViewTest((p) => (p && p.id === id ? { ...p, pdf_url: answers ? p.pdf_url : url } : p));
+      try { await navigator.clipboard.writeText(url); } catch {}
+      toast.success(`PDF havola nusxalandi (${res.host})`);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setShareBusy(false);
     }
   };
 
@@ -172,7 +191,11 @@ export default function Tests() {
             <Card key={t.id} className="stagger-item cursor-pointer">
               <div onClick={() => view(t.id)} style={{ animationDelay: `${i * 40}ms` }}>
                 <div className="mb-2 flex items-center justify-between">
-                  <Badge color={typeColors[t.type] || "neutral"}>{typeLabels[t.type] || t.type}</Badge>
+                  <div className="flex flex-wrap gap-1.5">
+                    <Badge color={typeColors[t.type] || "neutral"}>{typeLabels[t.type] || t.type}</Badge>
+                    {!!t.is_homework && <Badge color="warning">Uyga vazifa</Badge>}
+                    {t.belet_number && <Badge color="primary">Belet № {t.belet_number}</Badge>}
+                  </div>
                   <time className="text-caption">{t.created_at?.slice(0, 10)}</time>
                 </div>
                 <div className="mb-2 min-h-[40px] font-semibold text-slate-900">{t.title}</div>
@@ -189,6 +212,7 @@ export default function Tests() {
                 <Button variant="outline" size="sm" onClick={() => download(t.id, "docx")}>Word</Button>
                 <Button variant="outline" size="sm" onClick={() => download(t.id, "pdf")}>PDF</Button>
                 <Button variant="outline" size="sm" onClick={() => download(t.id, "pdf?answers=true")}>PDF+kalit</Button>
+                <Button variant="outline" size="sm" onClick={() => sharePdf(t.id)}>Havola</Button>
                 <div className="ml-auto">
                   <Button
                     variant="ghost"
@@ -285,14 +309,22 @@ export default function Tests() {
           <div>
             <div className="mb-4 flex flex-wrap items-center gap-2">
               <Badge color={typeColors[viewTest.type] || "neutral"}>{typeLabels[viewTest.type] || viewTest.type}</Badge>
+              {!!viewTest.is_homework && <Badge color="warning">Uyga vazifa</Badge>}
+              {viewTest.belet_number && <Badge color="primary">Belet № {viewTest.belet_number}</Badge>}
               <span className="text-caption">{viewTest.question_count} savol · {viewTest.duration_minutes} daqiqa · {viewTest.class_name}</span>
             </div>
             <div className="mb-4 flex flex-wrap gap-2">
               <Button variant="success" size="sm" onClick={() => download(viewTest.id, "docx")}>Word yuklab olish</Button>
               <Button variant="success" size="sm" onClick={() => download(viewTest.id, "pdf")}>PDF yuklab olish</Button>
               <Button variant="success" size="sm" onClick={() => download(viewTest.id, "pdf?answers=true")}>PDF + javoblar</Button>
+              <Button variant="outline" size="sm" onClick={() => sharePdf(viewTest.id)} disabled={shareBusy}>{shareBusy ? "Yuklanmoqda..." : "PDF havola"}</Button>
               <Button variant="outline" size="sm" onClick={() => regenerate(viewTest.id)}>Savollarni yangilash</Button>
             </div>
+            {viewTest.pdf_url && (
+              <p className="mb-3 break-all text-xs text-primary-700">
+                <a href={viewTest.pdf_url} target="_blank" rel="noreferrer">{viewTest.pdf_url}</a>
+              </p>
+            )}
             <div className="scrollbar-thin max-h-[50vh] space-y-3 overflow-y-auto pr-1">
               {viewTest.questions.map((q, i) => (
                 <div key={q.id} className="rounded-lg border border-stone-200 p-4">

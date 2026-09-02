@@ -82,6 +82,7 @@ export function Button({
   className = "",
   loading = false,
   icon,
+  type = "button",
   ...props
 }) {
   const sizes = {
@@ -91,6 +92,7 @@ export function Button({
   };
   return (
     <button
+      type={type}
       className={`inline-flex select-none items-center justify-center gap-2 rounded-lg font-semibold transition-all duration-150 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 disabled:pointer-events-none disabled:opacity-50 ${buttonVariants[variant]} ${sizes[size]} ${className}`}
       disabled={loading || props.disabled}
       {...props}
@@ -114,7 +116,7 @@ export function Modal({ open, onClose, title, children, wide = false }) {
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const prevActive = document.activeElement;
-    const t = setTimeout(() => panelRef.current?.querySelector("input, select, textarea, button")?.focus(), 50);
+    const t = setTimeout(() => panelRef.current?.querySelector("input:not([type=hidden]), textarea, select")?.focus(), 50);
     const onKey = (e) => {
       if (e.key === "Escape") onClose();
       if (e.key === "Tab" && panelRef.current) trapFocus(e, panelRef.current);
@@ -132,7 +134,9 @@ export function Modal({ open, onClose, title, children, wide = false }) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-slate-900/50 p-0 backdrop-blur-sm sm:items-start sm:p-4 sm:pt-16 animate-fade-in"
-      onClick={onClose}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
       role="presentation"
     >
       <div
@@ -141,11 +145,12 @@ export function Modal({ open, onClose, title, children, wide = false }) {
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
         className={`w-full ${wide ? "sm:max-w-3xl" : "sm:max-w-lg"} max-h-[92vh] flex flex-col rounded-t-2xl bg-white shadow-overlay animate-scale-in sm:rounded-2xl`}
-        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3 border-b border-stone-100 px-5 py-3.5">
           <h3 id={titleId} className="text-h3 truncate">{title}</h3>
           <button
+            type="button"
             onClick={onClose}
             aria-label="Yopish"
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-stone-100 hover:text-slate-600"
@@ -190,6 +195,8 @@ const badgeColors = {
   danger: "bg-danger-50 text-danger-700",
   blue: "bg-primary-50 text-primary-700",
   primary: "bg-primary-50 text-primary-700",
+  orange: "bg-warning-50 text-warning-700",
+  purple: "bg-primary-50 text-primary-700",
   indigo: "bg-primary-50 text-primary-700",
 };
 
@@ -214,20 +221,20 @@ export function Field({ label, children, hint, htmlFor }) {
 const inputClass =
   "w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 transition-colors duration-150 hover:border-stone-400 focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-stone-50 disabled:text-slate-400";
 
-export function Input({ id, ...props }) {
-  return <input id={id} {...props} className={inputClass} />;
+export function Input({ id, className = "", ...props }) {
+  return <input id={id} {...props} className={`${inputClass} ${className}`} />;
 }
 
-export function Select({ id, children, ...props }) {
+export function Select({ id, children, className = "", ...props }) {
   return (
-    <select id={id} {...props} className={`${inputClass} cursor-pointer`}>
+    <select id={id} {...props} className={`${inputClass} cursor-pointer ${className}`}>
       {children}
     </select>
   );
 }
 
-export function Textarea({ id, ...props }) {
-  return <textarea id={id} {...props} className={`${inputClass} min-h-[80px]`} />;
+export function Textarea({ id, className = "", ...props }) {
+  return <textarea id={id} {...props} className={`${inputClass} min-h-[80px] ${className}`} />;
 }
 
 export function Spinner() {

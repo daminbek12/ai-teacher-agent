@@ -244,6 +244,7 @@ export default function Textbooks() {
                 <div className="flex gap-1.5">
                   {t.has_file ? (
                     <button
+                      type="button"
                       onClick={(e) => { e.stopPropagation(); downloadPdf(t.id); }}
                       className="rounded-md border border-stone-200 bg-white px-2.5 py-0.5 text-xs font-semibold text-primary-700 transition-colors hover:bg-primary-50"
                       title="PDF yuklab olish"

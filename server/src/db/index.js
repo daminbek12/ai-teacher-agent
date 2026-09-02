@@ -81,7 +81,12 @@ CREATE TABLE IF NOT EXISTS tests (
   duration_minutes INTEGER DEFAULT 25,
   status TEXT DEFAULT 'draft',
   created_at TEXT DEFAULT (datetime('now')),
-  scheduled_for TEXT DEFAULT NULL
+  scheduled_for TEXT DEFAULT NULL,
+  is_homework INTEGER DEFAULT 0,
+  belet_number TEXT DEFAULT '',
+  pdf_url TEXT DEFAULT '',
+  pdf_url_answers TEXT DEFAULT '',
+  pdf_share_token TEXT DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS questions (
@@ -365,6 +370,21 @@ if (!topicsCols.includes("subject")) {
 const testsCols = db.prepare(`PRAGMA table_info(tests)`).all().map((c) => c.name);
 if (!testsCols.includes("subject")) {
   db.exec(`ALTER TABLE tests ADD COLUMN subject TEXT DEFAULT ''`);
+}
+if (!testsCols.includes("is_homework")) {
+  db.exec(`ALTER TABLE tests ADD COLUMN is_homework INTEGER DEFAULT 0`);
+}
+if (!testsCols.includes("belet_number")) {
+  db.exec(`ALTER TABLE tests ADD COLUMN belet_number TEXT DEFAULT ''`);
+}
+if (!testsCols.includes("pdf_url")) {
+  db.exec(`ALTER TABLE tests ADD COLUMN pdf_url TEXT DEFAULT ''`);
+}
+if (!testsCols.includes("pdf_url_answers")) {
+  db.exec(`ALTER TABLE tests ADD COLUMN pdf_url_answers TEXT DEFAULT ''`);
+}
+if (!testsCols.includes("pdf_share_token")) {
+  db.exec(`ALTER TABLE tests ADD COLUMN pdf_share_token TEXT DEFAULT ''`);
 }
 
 export default db;

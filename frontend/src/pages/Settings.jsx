@@ -123,7 +123,7 @@ export default function Settings() {
                 </Select>
               </Field>
             </div>
-            <p className="mt-2 text-caption">Har kuni belgilangan vaqtda bugungi jadvalda darsi bor har bir sinf uchun joriy mavzu asosida qisqa test avtomatik yaratiladi. Jadvalda darsi bo'lmagan sinflarga test yaratilmaydi. Bir kunda bir sinfga bitta kunlik test.</p>
+            <p className="mt-2 text-caption">Har kuni shu kungi mavzu asosida uyga vazifa testi yaratiladi, belet raqami chop etiladi. Jadvalda darsi bo'lmagan sinflarga test yaratilmaydi. Bir kunda bir sinfga bitta.</p>
           </Card>
         </div>
 
